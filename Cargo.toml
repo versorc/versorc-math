@@ -1,0 +1,20 @@
+[package]
+name = "versorc-math"
+version = "0.1.0"
+edition = "2021"
+authors = ["VersorC Contributors"]
+description = "Low-level Clifford Geometric Algebra, Versor Operators, and High-Dimensional Matrix Reductions"
+license = "Apache-2.0 OR MIT"
+readme = "README.md"
+keywords = ["geometric-algebra", "clifford", "versor", "quaternion", "math"]
+categories = ["mathematics", "science"]
+
+[dependencies]
+serde = { version = "1.0", default-features = false, features = ["alloc", "derive"], optional = true }
+
+[dev-dependencies]
+
+[features]
+default = ["std"]
+std = []
+serde = ["dep:serde"]
