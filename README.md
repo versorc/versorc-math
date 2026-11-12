@@ -19,13 +19,13 @@
 # VERSORC-MATH: High-Performance Clifford Geometric Algebra & Versor Engine
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-[![Crates.io](https://img.shields.io/crates/v/versorc-math.svg)](https://crates.io/crates/versorc-math)
+[![Crates.io](https://img.shields.io/crates/v/versorc-math.svg?color=orange&label=crates.io)](https://crates.io/crates/versorc-math)
 [![Crates.io Downloads](https://img.shields.io/crates/d/versorc-math.svg?color=orange&label=crates.io%20downloads)](https://crates.io/crates/versorc-math)
-[![PyPI](https://img.shields.io/pypi/v/versorc-math.svg)](https://pypi.org/project/versorc-math/)
-[![PyPI Downloads](https://img.shields.io/pepy/dt/versorc-math.svg?color=blue&label=pypi%20downloads)](https://pypi.org/project/versorc-math/)
-[![Documentation](https://docs.rs/versorc-math/badge.svg)](https://docs.rs/versorc-math)
+[![PyPI](https://img.shields.io/pypi/v/versorc-math.svg?color=blue&label=pypi)](https://pypi.org/project/versorc-math/)
+[![Python](https://img.shields.io/pypi/pyversions/versorc-math.svg?color=blue&label=python)](https://pypi.org/project/versorc-math/)
+[![Documentation](https://img.shields.io/docsrs/versorc-math.svg?color=green&label=docs.rs)](https://docs.rs/versorc-math)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24153328.svg)](https://doi.org/10.5281/zenodo.24153328)
-[![Release](https://img.shields.io/badge/Release-v0.1.1-brightgreen.svg)](https://github.com/versorc/versorc-math/releases)
+[![Release](https://img.shields.io/github/v/release/versorc/versorc-math?color=brightgreen&label=release)](https://github.com/versorc/versorc-math/releases)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/versorc/versorc-math/pulls)
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg)](CODE_OF_CONDUCT.md)
 [![Community](https://img.shields.io/badge/Community-Open_Source-purple.svg)](https://github.com/versorc/versorc-math)
