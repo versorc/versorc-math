@@ -49,7 +49,7 @@ impl PlanarSpinorBank {
         Self::from_angles(&angles)
     }
 
-    /// Applies the 2-versor spinor bank in-place across all planes in O(N) FLOPs.
+    /// Applies the 2-versor spinor bank in-place across all planes in O(N) FLOPs (LLaMA interleaved layout: [2i, 2i+1]).
     #[inline]
     pub fn apply_in_place(&self, x: &mut [f32]) {
         assert_eq!(x.len(), self.dim, "Input slice dimension mismatch");
@@ -57,6 +57,25 @@ impl PlanarSpinorBank {
         for i in 0..num_planes {
             let idx0 = i * 2;
             let idx1 = idx0 + 1;
+            let u = x[idx0];
+            let v = x[idx1];
+            let cos_th = self.cos_thetas[i];
+            let sin_th = self.sin_thetas[i];
+
+            x[idx0] = u * cos_th - v * sin_th;
+            x[idx1] = u * sin_th + v * cos_th;
+        }
+    }
+
+    /// Applies the 2-versor spinor bank in-place using NeoX split-half layout: [i, i + half_dim]
+    /// (Compatible with OLMoE, Qwen, and NeoX-style RoPE rotations).
+    #[inline]
+    pub fn apply_in_place_neox(&self, x: &mut [f32]) {
+        assert_eq!(x.len(), self.dim, "Input slice dimension mismatch");
+        let half_dim = self.cos_thetas.len();
+        for i in 0..half_dim {
+            let idx0 = i;
+            let idx1 = i + half_dim;
             let u = x[idx0];
             let v = x[idx1];
             let cos_th = self.cos_thetas[i];

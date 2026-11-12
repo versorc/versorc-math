@@ -1,0 +1,62 @@
+#version 450
+
+// ============================================================================
+// VERSORC VULKAN CGA COMPUTE PRIMITIVE: CGA_TRANSFORM
+// 3D Conformal Geometric Algebra Spherical Inversion & Conformal Versors
+// License: Apache-2.0 OR MIT
+// ============================================================================
+
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+layout(push_constant) uniform CgaPushConstants {
+    uint num_points;
+    uint op_type; // 0: Spherical Inversion, 1: Dilation, 2: Translation
+    float sphere_cx;
+    float sphere_cy;
+    float sphere_cz;
+    float sphere_radius;
+    float param_lambda; // Dilation factor or translation dx
+    float param_dy;
+    float param_dz;
+    uint _pad0;
+    uint _pad1;
+    uint _pad2;
+} pc;
+
+layout(std430, binding = 0) readonly buffer PointsIn {
+    vec4 in_pts[];
+};
+
+layout(std430, binding = 1) writeonly buffer PointsOut {
+    vec4 out_pts[];
+};
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    if (idx >= pc.num_points) {
+        return;
+    }
+
+    vec3 p = in_pts[idx].xyz;
+    vec3 center = vec3(pc.sphere_cx, pc.sphere_cy, pc.sphere_cz);
+
+    if (pc.op_type == 0u) {
+        // Spherical Inversion across sphere (center, radius)
+        vec3 d = p - center;
+        float dist_sq = dot(d, d);
+        float r_sq = pc.sphere_radius * pc.sphere_radius;
+        if (dist_sq > 1e-12) {
+            vec3 p_inv = center + (r_sq / dist_sq) * d;
+            out_pts[idx] = vec4(p_inv, 1.0);
+        } else {
+            out_pts[idx] = vec4(center, 0.0); // Point at infinity
+        }
+    } else if (pc.op_type == 1u) {
+        // Conformal Dilation
+        out_pts[idx] = vec4(p * pc.param_lambda, 1.0);
+    } else {
+        // Conformal Translation
+        vec3 shift = vec3(pc.param_lambda, pc.param_dy, pc.param_dz);
+        out_pts[idx] = vec4(p + shift, 1.0);
+    }
+}

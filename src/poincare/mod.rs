@@ -6,6 +6,9 @@
 // Invariant: Points strictly reside within the open unit ball ||x|| < 1.
 // ============================================================================
 
+pub mod cayley_klein;
+pub use cayley_klein::CayleyKleinSpace;
+
 pub const EPSILON_BOUNDARY: f32 = 1e-5;
 pub const MAX_NORM_SQ: f32 = (1.0 - EPSILON_BOUNDARY) * (1.0 - EPSILON_BOUNDARY);
 
@@ -111,5 +114,140 @@ impl PoincarePoint {
         }
 
         Self::new(res)
+    }
+
+    /// Fast monotonic key for ranking hyperbolic distance to `other` without transcendental functions (no sqrt/ln/arcosh).
+    /// Preserves strict ranking order: argmin d_B(u, v) == argmin key(u, v).
+    #[inline(always)]
+    pub fn hyperbolic_distance_key(&self, other: &Self) -> f32 {
+        assert_eq!(self.dim(), other.dim(), "Dimension mismatch in hyperbolic distance key");
+        let mut diff_sq = 0.0f32;
+        for i in 0..self.dim() {
+            let d = self.coords[i] - other.coords[i];
+            diff_sq += d * d;
+        }
+        let u_sq = self.norm_sq().min(MAX_NORM_SQ);
+        let v_sq = other.norm_sq().min(MAX_NORM_SQ);
+        let denom = (1.0f32 - u_sq) * (1.0f32 - v_sq);
+        diff_sq / denom.max(1e-12)
+    }
+
+    /// Conversion from Poincaré Ball to Klein Model (where geodesics are Euclidean straight chords):
+    /// k = 2 * u / (1 + ||u||^2)
+    #[inline]
+    pub fn to_klein(&self) -> Vec<f32> {
+        let u_sq = self.norm_sq().min(MAX_NORM_SQ);
+        let factor = 2.0f32 / (1.0f32 + u_sq);
+        self.coords.iter().map(|&x| x * factor).collect()
+    }
+
+    /// Conversion from Klein Model back to Poincaré Ball:
+    /// u = k / (1 + sqrt(1 - ||k||^2))
+    #[inline]
+    pub fn from_klein(k: &[f32]) -> Self {
+        let mut k_sq = 0.0f32;
+        for &x in k {
+            k_sq += x * x;
+        }
+        let k_sq_clamped = k_sq.min(MAX_NORM_SQ);
+        let denom = 1.0f32 + (1.0f32 - k_sq_clamped).sqrt();
+        let inv_denom = 1.0f32 / denom.max(1e-7);
+        let u = k.iter().map(|&x| x * inv_denom).collect();
+        Self::new(u)
+    }
+
+    /// Exact closed-form O(K) computation of the Einstein Hyperbolic Midpoint
+    /// using projective equivalence in the Klein model:
+    /// \mu_K = \frac{\sum_k w_k \gamma_k k_k}{\sum_k w_k \gamma_k}, \quad \gamma_k = \frac{1}{\sqrt{1 - ||k_k||^2}}
+    pub fn einstein_midpoint(points: &[Self], weights: &[f32]) -> Self {
+        assert_eq!(points.len(), weights.len(), "Points and weights count mismatch");
+        if points.is_empty() {
+            return Self::new(vec![]);
+        }
+        let dim = points[0].dim();
+        if points.len() == 1 {
+            return points[0].clone();
+        }
+
+        let mut sum_k = vec![0.0f32; dim];
+        let mut sum_gamma = 0.0f32;
+
+        for (pt, &w) in points.iter().zip(weights.iter()) {
+            if w <= 0.0 {
+                continue;
+            }
+            let k = pt.to_klein();
+            let mut k_sq = 0.0f32;
+            for &x in &k {
+                k_sq += x * x;
+            }
+            let gamma = 1.0f32 / (1.0f32 - k_sq.min(MAX_NORM_SQ)).sqrt().max(1e-7);
+            let eff_w = w * gamma;
+
+            for i in 0..dim {
+                sum_k[i] += eff_w * k[i];
+            }
+            sum_gamma += eff_w;
+        }
+
+        if sum_gamma <= 1e-9 {
+            return points[0].clone();
+        }
+
+        let inv_sum = 1.0f32 / sum_gamma;
+        let mut mean_k = vec![0.0f32; dim];
+        for i in 0..dim {
+            mean_k[i] = sum_k[i] * inv_sum;
+        }
+
+        Self::from_klein(&mean_k)
+    }
+
+    /// Riemannian Stochastic Gradient Descent (RSGD) step with Conformal Scaling:
+    /// Updates point along Riemannian gradient:
+    /// z^{(t+1)} = z^{(t)} - \eta * ((1 - ||z||^2) / 2)^2 * \nabla_E \mathcal{L}
+    #[inline]
+    pub fn rsgd_step(&mut self, euclid_grad: &[f32], learning_rate: f32) {
+        assert_eq!(self.dim(), euclid_grad.len(), "Dimension mismatch in RSGD step");
+        let n_sq = self.norm_sq().min(MAX_NORM_SQ);
+        let conf = (1.0f32 - n_sq) * 0.5f32;
+        let riemann_scale = learning_rate * (conf * conf);
+
+        for i in 0..self.dim() {
+            self.coords[i] -= riemann_scale * euclid_grad[i];
+        }
+        self.project_to_ball();
+    }
+
+    /// Conformal exponential map from tangent plane at origin T_0(B^d) to ball B^d:
+    /// \exp_0(v) = \tanh(||v|| / 2) * (v / ||v||)
+    #[inline]
+    pub fn exp_map_zero(v: &[f32]) -> Self {
+        let mut norm_sq = 0.0f32;
+        for &x in v {
+            norm_sq += x * x;
+        }
+        let norm = norm_sq.sqrt();
+        let scale = if norm < 1e-9 {
+            0.5f32
+        } else {
+            (norm * 0.5f32).tanh() / norm
+        };
+        let coords = v.iter().map(|&x| x * scale).collect();
+        Self::new(coords)
+    }
+
+    /// Conformal logarithmic map from ball B^d to tangent space at origin T_0(B^d):
+    /// \log_0(u) = 2 * \operatorname{artanh}(||u||) * (u / ||u||)
+    #[inline]
+    pub fn log_map_zero(&self) -> Vec<f32> {
+        let norm = self.norm().min(1.0 - EPSILON_BOUNDARY);
+        let scale = if norm < 1e-9 {
+            2.0f32
+        } else {
+            let artanh = 0.5f32 * ((1.0 + norm) / (1.0 - norm)).ln();
+            2.0f32 * artanh / norm
+        };
+        self.coords.iter().map(|&x| x * scale).collect()
     }
 }

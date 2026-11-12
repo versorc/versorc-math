@@ -1,0 +1,61 @@
+#version 450
+
+// ============================================================================
+// VERSORC VULKAN DENSE PRIMITIVE: ROPE COMPUTE SHADER (ROTARY POSITION EMBEDDING)
+// License: Apache-2.0
+// Attribution: Formulation supporting both NeoX (OLMoE/Qwen) and LLaMA layouts
+// ============================================================================
+
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+layout(push_constant) uniform PushConstants {
+    uint pos;
+    uint n_heads;
+    uint head_dim;
+    float rope_theta;
+    uint is_neox;
+    uint _pad0;
+    uint _pad1;
+    uint _pad2;
+} pc;
+
+layout(std430, binding = 0) buffer InOutVector {
+    float v[];
+};
+
+void main() {
+    uint gid = gl_GlobalInvocationID.x;
+    uint half_dim = pc.head_dim / 2;
+    uint total_pairs = pc.n_heads * half_dim;
+
+    if (gid >= total_pairs) {
+        return;
+    }
+
+    uint h = gid / half_dim;
+    uint i = gid % half_dim;
+    uint base = h * pc.head_dim;
+
+    float inv_freq = 1.0 / pow(pc.rope_theta, float(2 * i) / float(pc.head_dim));
+    float theta = float(pc.pos) * inv_freq;
+    float c = cos(theta);
+    float s = sin(theta);
+
+    if (pc.is_neox == 1) {
+        // NeoX layout (OLMoE, Qwen): split-half [i, i + half]
+        uint idx_a = base + i;
+        uint idx_b = base + i + half_dim;
+        float a = v[idx_a];
+        float b = v[idx_b];
+        v[idx_a] = a * c - b * s;
+        v[idx_b] = a * s + b * c;
+    } else {
+        // LLaMA layout: interleaved [2*i, 2*i + 1]
+        uint idx_a = base + 2 * i;
+        uint idx_b = base + 2 * i + 1;
+        float a = v[idx_a];
+        float b = v[idx_b];
+        v[idx_a] = a * c - b * s;
+        v[idx_b] = a * s + b * c;
+    }
+}

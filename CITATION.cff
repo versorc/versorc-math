@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+message: "If you use versorc-math in your research or engineering systems, please cite it as below."
+title: "versorc-math: High-Performance Clifford Geometric Algebra & Versor Quantization Engine"
+abstract: "A zero-overhead, SIMD-accelerated Clifford Geometric Algebra library and Dyadic Versor quantization engine in Rust and Python/NumPy, supporting Cl(3), Cl(2), 3D PGA (Projective Geometric Algebra), 3D CGA (Conformal Geometric Algebra), 4D STA (Spacetime Algebra with Lounesto spinor classification), and E8 lattice / 3-bit TurboQuant isotropic rotations."
+authors:
+  - name: "ZephSystems"
+version: 0.1.0
+date-released: 2026-11-12
+license: "Apache-2.0 OR MIT"
+repository-code: "https://github.com/versorc/versorc-math"
+keywords:
+  - "geometric algebra"
+  - "clifford algebra"
+  - "versor"
+  - "projective geometric algebra"
+  - "conformal geometric algebra"
+  - "spacetime algebra"
+  - "spinors"
+  - "quantization"
+  - "hadamard transform"
+  - "rust"
+  - "python"
+  - "numpy"

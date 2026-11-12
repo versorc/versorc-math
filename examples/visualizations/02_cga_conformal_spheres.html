@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VersorC-Math · 3D CGA (4,1) Conformal Inversions & Circles</title>
+  <script src="https://cdn.jsdelivr.net/npm/ganja.js"></script>
+  <style>
+    body, html {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #0b0d13;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      color: #e0e6ed;
+    }
+    #header {
+      position: absolute;
+      top: 14px;
+      left: 18px;
+      z-index: 100;
+      pointer-events: none;
+      background: rgba(16, 20, 31, 0.75);
+      backdrop-filter: blur(8px);
+      padding: 10px 18px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    #header h1 {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      color: #ffffff;
+    }
+    #header p {
+      margin: 4px 0 0 0;
+      font-size: 12px;
+      color: #8da2be;
+    }
+    #canvas-container {
+      width: 100%;
+      height: 600px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    canvas {
+      width: 100% !important;
+      height: 100% !important;
+    }
+  </style>
+</head>
+<body>
+  <div id="header">
+    <h1>VersorC-Math · 3D CGA (4,1) Conformal Inversions & Circles</h1>
+    <p>Clifford Algebra Cl(4, 1, 0) · Drag with left/right mouse button to orbit/pan</p>
+  </div>
+  <div id="canvas-container"></div>
+
+  <script>
+    Algebra(4, 1, 0, function() {
+      
+      // CGA Basis: e1, e2, e3 (Euclidean), 1e4 (e+), 1e5 (e-)
+      // Null basis: no = 0.5*(1e4 - 1e5), ni = 1e4 + 1e5
+      var no = 0.5*(1e4 - 1e5);
+      var ni = 1e4 + 1e5;
+
+      // CGA Point Constructor
+      var up = (x, y, z) => {
+        return no + x*1e1 + y*1e2 + z*1e3 + 0.5*(x*x + y*y + z*z)*ni;
+      };
+
+      // Dual Sphere: S = P - 0.5*r^2*ni
+      var R = 2.0;
+      var sphereCenter = up(0.0, 0.0, 0.0);
+      var dualSphere = sphereCenter - 0.5*R*R*ni;
+
+      // Dual Plane: p = nx*e1 + ny*e2 + nz*e3 + d*ni
+      var dualPlane = 0.0*1e1 + 1.0*1e2 + 0.0*1e3 + 0.5*ni;
+
+      // Circle = DualSphere ^ DualPlane
+      var circle = dualSphere ^ dualPlane;
+
+      // Dynamic orbiting probe point
+      var probePoint = ()=>{
+        var t = Date.now() * 0.0015;
+        var px = 3.5 * Math.cos(t);
+        var py = 1.0 * Math.sin(t*0.5);
+        var pz = 3.5 * Math.sin(t);
+        return up(px, py, pz);
+      };
+
+      // Conformal Inversion across Sphere: P' = S * P * S
+      var invertedPoint = ()=>{
+        var P = probePoint();
+        return dualSphere * P * dualSphere;
+      };
+    
+      
+      var scene = [
+        0x3300ccff,
+        "Inversion Sphere S",
+        dualSphere,
+        0x22ffaa00,
+        "Cutting Plane",
+        dualPlane,
+        0x00ffd700,
+        "Intersection Circle C = S \u2227 P",
+        circle,
+        0x00ff3344,
+        "External Point P",
+        probePoint,
+        0x0000ff88,
+        "Inverted Point P' = S P S",
+        invertedPoint
+      ];
+
+      var graphElement = this.graph(scene, {
+        animate: true,
+        camera: [0.0, 0.0, -6.0],
+        gl: true
+      });
+
+      document.getElementById('canvas-container').appendChild(graphElement);
+    });
+  </script>
+</body>
+</html>

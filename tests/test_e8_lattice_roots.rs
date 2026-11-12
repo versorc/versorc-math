@@ -65,3 +65,25 @@ fn test_conway_sloane_closest_vector_exactness() {
     let projected_half = E8Lattice::project_to_e8(&half_perturbed);
     assert_eq!(projected_half, half_root, "Conway-Sloane must recover half-integer E8 point");
 }
+
+#[test]
+fn test_e8_codebook_l1d_alignment_and_nibble_encoding() {
+    let cb = E8LatticeCodebook::new();
+    assert_eq!(std::mem::size_of_val(&cb), 1024, "Codebook must be exactly 1024 bytes (1 KiB)");
+    assert_eq!(std::mem::align_of_val(&cb), 64, "Codebook must be 64-byte aligned for L1d lines");
+
+    // Test nibble bijective decoding
+    // Nibble 0: q0=0 -> -1.5, q1=0 -> -1.5
+    let (w0, w1) = E8LatticeCodebook::decode_nibble(0);
+    assert_eq!((w0, w1), (-1.5, -1.5));
+
+    // Nibble 15: q0=3 -> +1.5, q1=3 -> +1.5
+    let (w0_max, w1_max) = E8LatticeCodebook::decode_nibble(15);
+    assert_eq!((w0_max, w1_max), (1.5, 1.5));
+
+    // Test continuous 8D projection to nibbles
+    let x = [0.5f32, -0.5, 1.5, -1.5, 0.5, 0.5, -0.5, -0.5];
+    let nibbles = E8LatticeCodebook::project_and_encode_to_nibbles(&x, 1.0);
+    let recon = E8LatticeCodebook::decode_4_nibbles(&nibbles, 1.0);
+    assert_eq!(recon, x, "Reconstructed 8D vector must match quantization points");
+}

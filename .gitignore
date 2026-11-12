@@ -1,2 +1,16 @@
 /target
 Cargo.lock
+
+# Binary and copyrighted literature
+literature/
+assets/
+vendor_reference/
+
+# Python build artifacts
+__pycache__/
+*.py[cod]
+*.so
+build/
+dist/
+*.egg-info/
+.eggs/

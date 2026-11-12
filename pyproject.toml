@@ -1,0 +1,26 @@
+[build-system]
+requires = ["maturin>=1.5,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "versorc-math"
+version = "0.1.0"
+description = "Clifford Geometric Algebra, Versor Operators, and High-Dimensional Quantization"
+readme = "README.md"
+authors = [{ name = "ZephSystems" }]
+requires-python = ">=3.9"
+dependencies = [
+    "numpy>=1.20",
+    "matplotlib>=3.5",
+]
+classifiers = [
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Mathematics",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+[tool.maturin]
+module-name = "versorc_math._versorc_math"
+python-source = "python"
+features = ["python"]

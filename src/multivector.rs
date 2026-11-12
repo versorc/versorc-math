@@ -232,6 +232,132 @@ impl<const P: usize, const Q: usize, const R: usize, const N: usize> Multivector
     pub fn sandwich(&self, x: &Self) -> Self {
         self.geometric_product(x).geometric_product(&self.reverse())
     }
+
+    /// Returns the unit pseudoscalar I = e_1 ^ e_2 ^ ... ^ e_n.
+    #[inline]
+    pub fn pseudoscalar() -> Self {
+        let mut mv = Self::zero();
+        mv.coords[N - 1] = 1.0;
+        mv
+    }
+
+    /// Computes the pseudoscalar inverse I^{-1} for non-degenerate metrics (R == 0).
+    /// Under signature (P, Q, 0): I^2 = (-1)^{n(n-1)/2 + Q}, so I^{-1} = I * (-1)^{n(n-1)/2 + Q}.
+    #[inline]
+    pub fn pseudoscalar_inverse() -> Option<Self> {
+        if R > 0 {
+            return None; // Degenerate metric has I^2 == 0
+        }
+        let n = P + Q;
+        let sign_power = (n * (n - 1) / 2 + Q) % 2;
+        let sign = if sign_power == 0 { 1.0f32 } else { -1.0f32 };
+        let mut mv = Self::zero();
+        mv.coords[N - 1] = sign;
+        Some(mv)
+    }
+
+    /// Computes the Hodge Dual: A* = A I^{-1} (Macdonald Def 6.16, Hestenes Section 1.2).
+    #[inline]
+    pub fn dual(&self) -> Option<Self> {
+        let inv_i = Self::pseudoscalar_inverse()?;
+        Some(self.geometric_product(&inv_i))
+    }
+
+    /// Computes the Undual (reverse duality): A I.
+    #[inline]
+    pub fn undual(&self) -> Self {
+        self.geometric_product(&Self::pseudoscalar())
+    }
+
+    /// Computes the Lie Commutator Product: [A, B] = 1/2 (A B - B A) (Hestenes Eq 1.55).
+    /// Anticommutative: [A, B] = -[B, A]. Satisfies the Jacobi identity.
+    #[inline]
+    pub fn commutator(&self, rhs: &Self) -> Self {
+        (*self * *rhs - *rhs * *self) * 0.5
+    }
+
+    /// Computes the Jordan Anticommutator (symmetric product): A ⊙ B = 1/2 (A B + B A).
+    #[inline]
+    pub fn anticommutator(&self, rhs: &Self) -> Self {
+        (*self * *rhs + *rhs * *self) * 0.5
+    }
+
+    /// Computes the Regressive (Meet) Product: A ∨ B = (A* ∧ B*).undual()
+    /// In non-degenerate spaces, gives the geometric intersection of blade subspaces.
+    #[inline]
+    pub fn regressive_product(&self, rhs: &Self) -> Option<Self> {
+        let dual_a = self.dual()?;
+        let dual_b = rhs.dual()?;
+        let wedge_dual = dual_a.wedge(&dual_b);
+        Some(wedge_dual.undual())
+    }
+
+    /// Computes the Hestenes Inner Product (Fat Dot): A • B = sum_{r>=1, s>=1} < <A>_r <B>_s >_{|r - s|}.
+    /// As defined in Hestenes & Sobczyk (1984), Section 1.1, Eq. 1.8.
+    #[inline]
+    pub fn hestenes_inner_product(&self, rhs: &Self) -> Self {
+        let dim = P + Q + R;
+        let mut res = Self::zero();
+        for r in 1..=dim {
+            let a_r = self.grade_projection(r);
+            if a_r.norm_sq() == 0.0 {
+                continue;
+            }
+            for s in 1..=dim {
+                let b_s = rhs.grade_projection(s);
+                if b_s.norm_sq() == 0.0 {
+                    continue;
+                }
+                let target_grade = if r >= s { r - s } else { s - r };
+                let prod = a_r.geometric_product(&b_s);
+                res += prod.grade_projection(target_grade);
+            }
+        }
+        res
+    }
+
+    /// Computes the exact closed-form algebraic inverse A^{-1} for multivectors:
+    /// - For Cl(2, 0, 0): A^{-1} = \bar{A} / (A \bar{A})_0
+    /// - For Cl(3, 0, 0): A^{-1} = \bar{A} (A \bar{A})~ / det(A)
+    /// - General fallback for versors: A~ / ||A||^2
+    /// Returns None if multivector is singular (det(A) == 0).
+    #[inline]
+    pub fn inverse(&self) -> Option<Self> {
+        if N == 4 && P == 2 && Q == 0 && R == 0 {
+            // Cl(2) exact inverse
+            let conj = self.conjugation();
+            let denom = (*self * conj).scalar();
+            if denom.abs() > 1e-12 {
+                Some(conj * (1.0 / denom))
+            } else {
+                None
+            }
+        } else if N == 8 && P == 3 && Q == 0 && R == 0 {
+            // Cl(3) exact closed-form inverse
+            let conj = self.conjugation();
+            let c = *self * conj; // C in grade 0 and 3
+            let c_rev = c.reverse();
+            let det = (c * c_rev).scalar();
+            if det.abs() > 1e-12 {
+                let num = conj * c_rev;
+                Some(num * (1.0 / det))
+            } else {
+                None
+            }
+        } else {
+            // General versor fallback: if A A~ is a nonzero scalar
+            let rev = self.reverse();
+            let norm_sq = self.norm_sq();
+            if norm_sq.abs() > 1e-12 {
+                let candidate = rev * (1.0 / norm_sq);
+                let test = *self * candidate;
+                if (test.scalar() - 1.0).abs() < 1e-4 && (test - Self::from_scalar(1.0)).norm() < 1e-4 {
+                    return Some(candidate);
+                }
+            }
+            None
+        }
+    }
 }
 
 // Operator overloads

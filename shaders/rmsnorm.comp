@@ -1,0 +1,69 @@
+#version 450
+#extension GL_KHR_shader_subgroup_basic : enable
+#extension GL_KHR_shader_subgroup_arithmetic : enable
+
+// ============================================================================
+// VERSORC VULKAN DENSE PRIMITIVE: RMSNORM COMPUTE SHADER
+// License: Apache-2.0
+// Attribution: Mathematical formulation inspired by LLaMA / ggml-vulkan (MIT)
+// ============================================================================
+
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+layout(push_constant) uniform PushConstants {
+    uint d_model;
+    float eps;
+    uint gamma_offset_f32;
+    uint _pad1;
+} pc;
+
+layout(std430, binding = 0) readonly buffer InputX {
+    float x_in[];
+};
+
+layout(std430, binding = 1) readonly buffer GammaWeight {
+    float gamma[];
+};
+
+layout(std430, binding = 2) writeonly buffer OutputY {
+    float y_out[];
+};
+
+shared float s_subgroup_sums[16];
+shared float s_inv_rms;
+
+void main() {
+    uint tid = gl_LocalInvocationID.x;
+    float thread_sum = 0.0;
+
+    // Strided accumulation of squared values
+    for (uint i = tid; i < pc.d_model; i += gl_WorkGroupSize.x) {
+        float val = x_in[i];
+        thread_sum += val * val;
+    }
+
+    // Subgroup reduction
+    float wave_sum = subgroupAdd(thread_sum);
+    if (subgroupElect()) {
+        s_subgroup_sums[gl_SubgroupID] = wave_sum;
+    }
+    barrier();
+
+    // First thread sums across subgroups and computes reciprocal RMS
+    if (tid == 0) {
+        float total_sum = 0.0;
+        uint num_subgroups = gl_NumSubgroups;
+        for (uint s = 0; s < num_subgroups; s++) {
+            total_sum += s_subgroup_sums[s];
+        }
+        float mean = total_sum / float(pc.d_model);
+        s_inv_rms = inversesqrt(mean + pc.eps);
+    }
+    barrier();
+
+    // Scale and write back
+    float inv = s_inv_rms;
+    for (uint i = tid; i < pc.d_model; i += gl_WorkGroupSize.x) {
+        y_out[i] = x_in[i] * inv * gamma[pc.gamma_offset_f32 + i];
+    }
+}

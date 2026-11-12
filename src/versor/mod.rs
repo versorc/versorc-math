@@ -4,12 +4,14 @@
 // ============================================================================
 
 pub mod hamilton;
+pub mod dual_quaternion;
 pub mod rotor;
 pub mod householder;
 pub mod dyadic;
 pub mod planar_bank;
 
 pub use hamilton::Quaternion;
+pub use dual_quaternion::DualQuaternion;
 pub use rotor::PlanarRotor;
 pub use householder::{HouseholderVersor, HouseholderChain};
 pub use dyadic::DyadicWalshVersor;

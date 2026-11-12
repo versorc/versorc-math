@@ -1,0 +1,51 @@
+name: CI & Verification
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  test-rust:
+    name: Rust Suite (x86_64 Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-gnu
+
+      - name: Rustfmt Check
+        run: cargo fmt --all -- --check
+
+      - name: Cargo Check (all features)
+        run: cargo check --all-targets --all-features
+
+      - name: Run Core Integration Tests
+        run: cargo test --verbose
+
+  test-python:
+    name: PyO3 & NumPy Suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python dependencies
+        run: pip install --upgrade pip numpy pytest maturin
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build Python Extension with Maturin
+        run: maturin develop --release --features python
+
+      - name: Run Pytest Suite
+        run: pytest python/tests/test_ga_numpy.py -v

@@ -1,0 +1,68 @@
+#version 450
+
+// ============================================================================
+// VERSORC VULKAN PGA COMPUTE PRIMITIVE: PGA_TRANSFORM
+// 3D Projective Geometric Algebra / Dual Quaternion Rigid Tensor Transformation
+// License: Apache-2.0 OR MIT
+//
+// Computes p' = M * p * M~ for arbitrary batches/tensors of 3D points
+// completely on GPU VRAM with zero host-roundtrip overhead.
+// ============================================================================
+
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+layout(push_constant) uniform PgaPushConstants {
+    uint num_points;
+    float motor_s;
+    float motor_b23;
+    float motor_b31;
+    float motor_b12;
+    float motor_d01;
+    float motor_d02;
+    float motor_d03;
+    float motor_e0123;
+    uint _pad0;
+    uint _pad1;
+    uint _pad2;
+} pc;
+
+layout(std430, binding = 0) readonly buffer PointsIn {
+    vec4 in_pts[];
+};
+
+layout(std430, binding = 1) writeonly buffer PointsOut {
+    vec4 out_pts[];
+};
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    if (idx >= pc.num_points) {
+        return;
+    }
+
+    vec3 p = in_pts[idx].xyz;
+
+    // Hamilton quaternion extraction from PGA motor:
+    // w = s, x = -b23, y = -b31, z = -b12
+    float qw = pc.motor_s;
+    vec3 qv = vec3(-pc.motor_b23, -pc.motor_b31, -pc.motor_b12);
+
+    // Dual quaternion translation part:
+    // w_d = -e0123, x_d = -d01, y_d = -d02, z_d = -d03
+    float qdw = -pc.motor_e0123;
+    vec3 qdv = vec3(-pc.motor_d01, -pc.motor_d02, -pc.motor_d03);
+
+    // 1. Rotate point via Rodrigues quaternion formula: q * p * q*
+    vec3 t_rot = 2.0 * cross(qv, p);
+    vec3 p_rot = p + qw * t_rot + cross(qv, t_rot);
+
+    // 2. Extract translation vector: t = 2 * (q_d * q_r*)
+    // q_r* = (qw, -qv)
+    // (q_d * q_r*)_xyz = qdw * (-qv) + qw * qdv + cross(qdv, -qv)
+    vec3 t_trans = 2.0 * (-qdw * qv + qw * qdv - cross(qdv, qv));
+
+    // 3. Final affine transformed point
+    vec3 p_final = p_rot + t_trans;
+
+    out_pts[idx] = vec4(p_final, 1.0);
+}

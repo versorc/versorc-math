@@ -32,4 +32,11 @@ fn test_planar_spinor_bank_rope_equivalence() {
 
     let norm_after: f32 = vec.iter().map(|x| x * x).sum::<f32>().sqrt();
     assert!((norm_after - norm_before).abs() < 1e-6, "PlanarSpinorBank must be an exact L2 isometry");
+
+    // NeoX split-half layout test
+    let mut vec_neox = vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0];
+    let norm_neox_before: f32 = vec_neox.iter().map(|x| x * x).sum::<f32>().sqrt();
+    bank.apply_in_place_neox(&mut vec_neox);
+    let norm_neox_after: f32 = vec_neox.iter().map(|x| x * x).sum::<f32>().sqrt();
+    assert!((norm_neox_after - norm_neox_before).abs() < 1e-6, "NeoX RoPE must also preserve exact L2 isometry");
 }

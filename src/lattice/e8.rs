@@ -9,6 +9,97 @@
 
 pub const E8_DIMENSION: usize = 8;
 pub const E8_NUM_ROOTS: usize = 240;
+pub const E8_CODEBOOK_SIZE: usize = 1024; // Exactly 1 KiB
+pub const E8_NUM_CENTROIDS: usize = E8_CODEBOOK_SIZE / E8_DIMENSION; // 128 centroids in 8D
+
+/// E8 Lattice Codebook of 1 KiB.
+/// Explicitly aligned to 64 bytes to guarantee residence in exactly 16 contiguous L1d cache lines.
+#[repr(C, align(64))]
+#[derive(Debug, Clone, PartialEq)]
+pub struct E8LatticeCodebook {
+    /// 128 centroids x 8 integer coordinates (scaled int8) = 1024 bytes
+    pub table: [i8; E8_CODEBOOK_SIZE],
+}
+
+const _: () = assert!(
+    std::mem::size_of::<E8LatticeCodebook>() == E8_CODEBOOK_SIZE,
+    "E8LatticeCodebook must measure exactly 1024 bytes (1 KiB)"
+);
+
+impl Default for E8LatticeCodebook {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl E8LatticeCodebook {
+    /// Initializes E8P codebook with canonical E8 half-integer roots scaled by 2 (coordinates in {+1, -1}).
+    /// Every 8D centroid has an even number of minus signs, satisfying E8 membership.
+    pub fn new() -> Self {
+        let mut table = [0i8; E8_CODEBOOK_SIZE];
+        let mut idx = 0;
+        for c in 0..E8_NUM_CENTROIDS {
+            let mut parity = 0;
+            for d in 0..7 {
+                let sign = if ((c >> d) & 1) == 0 { 1i8 } else { -1i8 };
+                if sign == -1 {
+                    parity ^= 1;
+                }
+                table[idx] = sign;
+                idx += 1;
+            }
+            // 8th coordinate enforces even number of negative signs
+            table[idx] = if parity == 0 { 1i8 } else { -1i8 };
+            idx += 1;
+        }
+        Self { table }
+    }
+
+    /// Decodes a 4-bit nibble [0..15] back into its 2D constituent weights (w0, w1).
+    /// Invertible bijection with project_and_encode_to_nibbles. Unbiased symmetric levels in [-1.5, +1.5].
+    #[inline(always)]
+    pub fn decode_nibble(nibble: u8) -> (f32, f32) {
+        let q0 = (nibble & 0x03) as f32;
+        let q1 = ((nibble >> 2) & 0x03) as f32;
+        let w0 = q0 - 1.5;
+        let w1 = q1 - 1.5;
+        (w0, w1)
+    }
+
+    /// Decodes 4 4-bit nibbles (2 bytes) back to an 8-dimensional E8 vector.
+    #[inline(always)]
+    pub fn decode_4_nibbles(nibbles: &[u8; 4], scale: f32) -> [f32; E8_DIMENSION] {
+        let mut out = [0.0f32; E8_DIMENSION];
+        for k in 0..4 {
+            let (w0, w1) = Self::decode_nibble(nibbles[k]);
+            out[2 * k] = w0 * scale;
+            out[2 * k + 1] = w1 * scale;
+        }
+        out
+    }
+
+    /// Projects an 8D continuous vector onto the closest vector in the Conway-Sloane half-integer E8 coset (D8 + 1/2*1),
+    /// then discretizes each 2D sub-vector to 1 of 16 symmetric zero-mean states (4 bits: 2 bits per coordinate).
+    /// Levels per coordinate: {-1.5, -0.5, +0.5, +1.5} * scale. Strictly unbiased (mean = 0.0).
+    pub fn project_and_encode_to_nibbles(x: &[f32; E8_DIMENSION], scale: f32) -> [u8; 4] {
+        let inv_scale = if scale > 1e-7 { 1.0 / scale } else { 1.0 };
+        let mut shifted_x = [0.0f32; E8_DIMENSION];
+        for d in 0..E8_DIMENSION {
+            shifted_x[d] = x[d] * inv_scale - 0.5;
+        }
+
+        let p_int = E8Lattice::project_to_d8(&shifted_x);
+        let mut nibbles = [0u8; 4];
+        for k in 0..4 {
+            let w0 = p_int[2 * k] as f32 + 0.5;
+            let w1 = p_int[2 * k + 1] as f32 + 0.5;
+            let q0 = ((w0 + 1.5).round() as i32).clamp(0, 3) as u8;
+            let q1 = ((w1 + 1.5).round() as i32).clamp(0, 3) as u8;
+            nibbles[k] = (q0 & 0x03) | ((q1 & 0x03) << 2);
+        }
+        nibbles
+    }
+}
 
 /// The 8-dimensional Gosset E8 lattice structure and Conway-Sloane closest-point decoder.
 pub struct E8Lattice;

@@ -1,0 +1,31 @@
+#version 450
+
+// ============================================================================
+// VERSORC VULKAN DENSE PRIMITIVE: VEC_ADD (RESIDUAL STREAM ACCUMULATION)
+// License: Apache-2.0
+// y[idx] += x[idx] directly in DEVICE_LOCAL VRAM
+// ============================================================================
+
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+layout(push_constant) uniform PushConstants {
+    uint num_elements;
+    uint _pad0;
+    uint _pad1;
+    uint _pad2;
+} pc;
+
+layout(std430, binding = 0) readonly buffer Addend {
+    float x[];
+};
+
+layout(std430, binding = 1) buffer Accumulator {
+    float y[];
+};
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    if (idx < pc.num_elements) {
+        y[idx] += x[idx];
+    }
+}

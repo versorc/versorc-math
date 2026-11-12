@@ -10,6 +10,7 @@ use super::VersorAction;
 /// Represents an even 2-versor (rotor) on 3D Euclidean space.
 #[repr(C, align(16))]
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "vulkan", derive(bytemuck::Pod, bytemuck::Zeroable))]
 pub struct Quaternion {
     pub w: f32, // Scalar (real) component
     pub x: f32, // i component (bivector -e_23)
