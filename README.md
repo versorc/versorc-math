@@ -24,7 +24,8 @@
 [![PyPI](https://img.shields.io/pypi/v/versorc-math.svg)](https://pypi.org/project/versorc-math/)
 [![PyPI Downloads](https://img.shields.io/pepy/dt/versorc-math.svg?color=blue&label=pypi%20downloads)](https://pypi.org/project/versorc-math/)
 [![Documentation](https://docs.rs/versorc-math/badge.svg)](https://docs.rs/versorc-math)
-[![Zenodo](https://img.shields.io/badge/Zenodo-Open_Access-blue.svg)](https://zenodo.org)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24153329.svg)](https://doi.org/10.5281/zenodo.24153329)
+[![GitHub Release](https://img.shields.io/github/v/release/versorc/versorc-math.svg?color=purple)](https://github.com/versorc/versorc-math/releases/latest)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/versorc/versorc-math/pulls)
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg)](CODE_OF_CONDUCT.md)
 [![Community](https://img.shields.io/badge/Community-Open_Source-purple.svg)](https://github.com/versorc/versorc-math)
@@ -386,6 +387,7 @@ If you utilize `versorc-math` in your research, academic publications, or open-s
   year         = 2026,
   publisher    = {Zenodo},
   version      = {0.1.0},
+  doi          = {10.5281/zenodo.24153329},
   url          = {https://github.com/versorc/versorc-math}
 }
 ```
