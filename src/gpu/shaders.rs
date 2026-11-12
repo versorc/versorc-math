@@ -185,6 +185,59 @@ pub struct CgaTransformPushConstants {
     pub _pad2: u32,
 }
 
+impl CgaTransformPushConstants {
+    pub fn spherical_inversion(num_points: u32, center: [f32; 3], radius: f32) -> Self {
+        Self {
+            num_points,
+            op_type: 0,
+            sphere_cx: center[0],
+            sphere_cy: center[1],
+            sphere_cz: center[2],
+            sphere_radius: radius,
+            param_lambda: 0.0,
+            param_dy: 0.0,
+            param_dz: 0.0,
+            _pad0: 0,
+            _pad1: 0,
+            _pad2: 0,
+        }
+    }
+
+    pub fn dilation(num_points: u32, factor: f32) -> Self {
+        Self {
+            num_points,
+            op_type: 1,
+            sphere_cx: 0.0,
+            sphere_cy: 0.0,
+            sphere_cz: 0.0,
+            sphere_radius: 0.0,
+            param_lambda: factor,
+            param_dy: 0.0,
+            param_dz: 0.0,
+            _pad0: 0,
+            _pad1: 0,
+            _pad2: 0,
+        }
+    }
+
+    pub fn translation(num_points: u32, shift: [f32; 3]) -> Self {
+        Self {
+            num_points,
+            op_type: 2,
+            sphere_cx: 0.0,
+            sphere_cy: 0.0,
+            sphere_cz: 0.0,
+            sphere_radius: 0.0,
+            param_lambda: shift[0],
+            param_dy: shift[1],
+            param_dz: shift[2],
+            _pad0: 0,
+            _pad1: 0,
+            _pad2: 0,
+        }
+    }
+}
+
 /// Push constant payload for unified Cl(3, 0) multivector batch operations on GPU.
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq)]

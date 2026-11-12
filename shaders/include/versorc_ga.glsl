@@ -267,8 +267,8 @@ vec3 poincare_mobius_add(vec3 u, vec3 v) {
 
 // Poincare geodesic distance
 float poincare_distance(vec3 u, vec3 v) {
-    float u2 = dot(u, u);
-    float v2 = dot(v, v);
+    float u2 = min(dot(u, u), 0.999999);
+    float v2 = min(dot(v, v), 0.999999);
     vec3 diff = u - v;
     float diff2 = dot(diff, diff);
     float denom = (1.0 - u2) * (1.0 - v2);
@@ -291,6 +291,19 @@ vec3 klein_to_poincare(vec3 k) {
     float k2 = dot(k, k);
     if (k2 >= 1.0) k2 = 0.999999;
     return k / (1.0 + sqrt(max(1.0 - k2, 1e-12)));
+}
+
+vec3 poincare_einstein_midpoint(vec3 u, vec3 v) {
+    vec3 ku = poincare_to_klein(u);
+    vec3 kv = poincare_to_klein(v);
+    float ku2 = min(dot(ku, ku), 0.99999);
+    float kv2 = min(dot(kv, kv), 0.99999);
+    float gu = 1.0 / max(sqrt(1.0 - ku2), 1e-7);
+    float gv = 1.0 / max(sqrt(1.0 - kv2), 1e-7);
+    float sum_g = gu + gv;
+    if (sum_g <= 1e-9) return u;
+    vec3 km = (gu * ku + gv * kv) / sum_g;
+    return klein_to_poincare(km);
 }
 
 #endif // VERSORC_GA_GLSL

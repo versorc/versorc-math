@@ -7,7 +7,7 @@ layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
 
 layout(push_constant) uniform BatchPushConstants {
     uint num_elements;
-    uint op_code; // 0=GP, 1=Wedge, 2=LeftContract, 3=Hestenes, 4=Meet, 5=Commutator, 6=Anticommutator, 7=Sandwich, 8=Dual, 9=Reverse, 10=Involution, 11=Conjugation
+    uint op_code; // 0=GP, 1=Wedge, 2=LeftContract, 3=Hestenes, 4=Meet, 5=Commutator, 6=Anticommutator, 7=Sandwich, 8=Dual, 9=Reverse, 10=Involution, 11=Conjugation, 12=Undual
     uint _pad0;
     uint _pad1;
 } params;
@@ -77,6 +77,9 @@ void main() {
             break;
         case 11: // Clifford Conjugation
             result = cl3_conjugation(a);
+            break;
+        case 12: // Undual
+            result = cl3_undual(a);
             break;
         default:
             result = cl3_zero();
