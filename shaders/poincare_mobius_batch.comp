@@ -1,0 +1,58 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+
+#include "include/versorc_ga.glsl"
+
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+layout(push_constant) uniform PoincarePushConstants {
+    uint num_elements;
+    uint op_code; // 0=Mobius Add, 1=Geodesic Distance, 2=Spherical Inversion
+    float sphere_cx;
+    float sphere_cy;
+    float sphere_cz;
+    float sphere_radius;
+    uint _pad0;
+    uint _pad1;
+} params;
+
+layout(std430, set = 0, binding = 0) readonly buffer InputU {
+    float u_coords[]; // 3 floats per point (x, y, z)
+};
+
+layout(std430, set = 0, binding = 1) readonly buffer InputV {
+    float v_coords[]; // 3 floats per point (x, y, z)
+};
+
+layout(std430, set = 0, binding = 2) writeonly buffer OutputOut {
+    float out_coords[]; // 3 floats for point, or 1 float for distance
+};
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    if (idx >= params.num_elements) return;
+
+    uint base3 = idx * 3;
+    vec3 u = vec3(u_coords[base3 + 0], u_coords[base3 + 1], u_coords[base3 + 2]);
+
+    if (params.op_code == 0) {
+        // Mobius Gyrovector Addition: u (+) v
+        vec3 v = vec3(v_coords[base3 + 0], v_coords[base3 + 1], v_coords[base3 + 2]);
+        vec3 res = poincare_mobius_add(u, v);
+        out_coords[base3 + 0] = res.x;
+        out_coords[base3 + 1] = res.y;
+        out_coords[base3 + 2] = res.z;
+    } else if (params.op_code == 1) {
+        // Geodesic Distance
+        vec3 v = vec3(v_coords[base3 + 0], v_coords[base3 + 1], v_coords[base3 + 2]);
+        float d = poincare_distance(u, v);
+        out_coords[idx] = d;
+    } else if (params.op_code == 2) {
+        // Conformal Spherical Inversion
+        vec3 center = vec3(params.sphere_cx, params.sphere_cy, params.sphere_cz);
+        vec3 res = cga_spherical_inversion(u, center, params.sphere_radius);
+        out_coords[base3 + 0] = res.x;
+        out_coords[base3 + 1] = res.y;
+        out_coords[base3 + 2] = res.z;
+    }
+}

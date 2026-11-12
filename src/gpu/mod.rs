@@ -6,10 +6,11 @@
 pub mod shaders;
 
 pub use shaders::{
-    CgaTransformPushConstants, HotStratumE8PushConstants, PgaTransformPushConstants,
-    RmsNormPushConstants, RopePushConstants, SiluMulPushConstants, VecAddPushConstants,
-    CGA_TRANSFORM_SPV, HOT_STRATUM_E8_SPV, PGA_TRANSFORM_SPV, RMSNORM_SPV, ROPE_SPV,
-    SILU_MUL_SPV, VEC_ADD_SPV,
+    CgaTransformPushConstants, GaCl3BatchPushConstants, HotStratumE8PushConstants,
+    PgaTransformPushConstants, PoincareBatchPushConstants, RmsNormPushConstants,
+    RopePushConstants, SiluMulPushConstants, VecAddPushConstants, CGA_TRANSFORM_SPV,
+    GA_CL3_BATCH_SPV, HOT_STRATUM_E8_SPV, PGA_TRANSFORM_SPV, POINCARE_MOBIUS_BATCH_SPV,
+    RMSNORM_SPV, ROPE_SPV, SILU_MUL_SPV, VEC_ADD_SPV,
 };
 
 #[cfg(feature = "vulkan")]
@@ -599,6 +600,414 @@ pub mod vulkan {
                 self.device.destroy_descriptor_set_layout(desc_layout, None);
                 self.device.destroy_buffer(in_buf, None);
                 self.device.free_memory(in_mem, None);
+                self.device.destroy_buffer(out_buf, None);
+                self.device.free_memory(out_mem, None);
+            }
+
+            Ok(results)
+        }
+
+        /// Dispatches a batch Cl(3, 0) multivector operation (op_code 0..11) on GPU VRAM.
+        pub fn dispatch_cl3_batch(
+            &self,
+            a: &[[f32; 8]],
+            b: &[[f32; 8]],
+            op_code: u32,
+        ) -> Result<Vec<[f32; 8]>, String> {
+            let n = a.len();
+            if n == 0 {
+                return Ok(Vec::new());
+            }
+
+            let size = (n * std::mem::size_of::<[f32; 8]>()) as vk::DeviceSize;
+
+            let (a_buf, a_mem) = self.create_buffer(
+                size,
+                vk::BufferUsageFlags::STORAGE_BUFFER,
+                vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
+            )?;
+
+            let (b_buf, b_mem) = self.create_buffer(
+                size,
+                vk::BufferUsageFlags::STORAGE_BUFFER,
+                vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
+            )?;
+
+            let (c_buf, c_mem) = self.create_buffer(
+                size,
+                vk::BufferUsageFlags::STORAGE_BUFFER,
+                vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
+            )?;
+
+            unsafe {
+                let ptr_a = self.device.map_memory(a_mem, 0, size, vk::MemoryMapFlags::empty())
+                    .map_err(|e| format!("map a_mem failed: {}", e))? as *mut [f32; 8];
+                std::ptr::copy_nonoverlapping(a.as_ptr(), ptr_a, n);
+                self.device.unmap_memory(a_mem);
+
+                if !b.is_empty() {
+                    let ptr_b = self.device.map_memory(b_mem, 0, size, vk::MemoryMapFlags::empty())
+                        .map_err(|e| format!("map b_mem failed: {}", e))? as *mut [f32; 8];
+                    std::ptr::copy_nonoverlapping(b.as_ptr(), ptr_b, b.len().min(n));
+                    self.device.unmap_memory(b_mem);
+                }
+            }
+
+            let bindings = [
+                vk::DescriptorSetLayoutBinding::default()
+                    .binding(0)
+                    .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                    .descriptor_count(1)
+                    .stage_flags(vk::ShaderStageFlags::COMPUTE),
+                vk::DescriptorSetLayoutBinding::default()
+                    .binding(1)
+                    .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                    .descriptor_count(1)
+                    .stage_flags(vk::ShaderStageFlags::COMPUTE),
+                vk::DescriptorSetLayoutBinding::default()
+                    .binding(2)
+                    .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                    .descriptor_count(1)
+                    .stage_flags(vk::ShaderStageFlags::COMPUTE),
+            ];
+
+            let desc_layout = unsafe {
+                self.device.create_descriptor_set_layout(
+                    &vk::DescriptorSetLayoutCreateInfo::default().bindings(&bindings),
+                    None,
+                ).map_err(|e| format!("create_descriptor_set_layout failed: {}", e))?
+            };
+
+            let push_range = vk::PushConstantRange::default()
+                .stage_flags(vk::ShaderStageFlags::COMPUTE)
+                .offset(0)
+                .size(std::mem::size_of::<GaCl3BatchPushConstants>() as u32);
+
+            let pipeline_layout = unsafe {
+                self.device.create_pipeline_layout(
+                    &vk::PipelineLayoutCreateInfo::default()
+                        .set_layouts(&[desc_layout])
+                        .push_constant_ranges(&[push_range]),
+                    None,
+                ).map_err(|e| format!("create_pipeline_layout failed: {}", e))?
+            };
+
+            let shader_module = self.create_shader_module(GA_CL3_BATCH_SPV)?;
+            let entry_name = CStr::from_bytes_with_nul(b"main\0").unwrap();
+            let stage_info = vk::PipelineShaderStageCreateInfo::default()
+                .stage(vk::ShaderStageFlags::COMPUTE)
+                .module(shader_module)
+                .name(entry_name);
+
+            let pipeline = unsafe {
+                self.device.create_compute_pipelines(
+                    vk::PipelineCache::null(),
+                    &[vk::ComputePipelineCreateInfo::default().stage(stage_info).layout(pipeline_layout)],
+                    None,
+                ).map_err(|(_, e)| format!("create_compute_pipelines failed: {:?}", e))?[0]
+            };
+
+            let pool_size = vk::DescriptorPoolSize::default()
+                .ty(vk::DescriptorType::STORAGE_BUFFER)
+                .descriptor_count(3);
+
+            let desc_pool = unsafe {
+                self.device.create_descriptor_pool(
+                    &vk::DescriptorPoolCreateInfo::default().max_sets(1).pool_sizes(&[pool_size]),
+                    None,
+                ).map_err(|e| format!("create_descriptor_pool failed: {}", e))?
+            };
+
+            let desc_set = unsafe {
+                self.device.allocate_descriptor_sets(
+                    &vk::DescriptorSetAllocateInfo::default().descriptor_pool(desc_pool).set_layouts(&[desc_layout]),
+                ).map_err(|e| format!("allocate_descriptor_sets failed: {}", e))?[0]
+            };
+
+            let buf_a_info = vk::DescriptorBufferInfo::default().buffer(a_buf).offset(0).range(size);
+            let buf_b_info = vk::DescriptorBufferInfo::default().buffer(b_buf).offset(0).range(size);
+            let buf_c_info = vk::DescriptorBufferInfo::default().buffer(c_buf).offset(0).range(size);
+
+            let writes = [
+                vk::WriteDescriptorSet::default()
+                    .dst_set(desc_set)
+                    .dst_binding(0)
+                    .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                    .buffer_info(std::slice::from_ref(&buf_a_info)),
+                vk::WriteDescriptorSet::default()
+                    .dst_set(desc_set)
+                    .dst_binding(1)
+                    .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                    .buffer_info(std::slice::from_ref(&buf_b_info)),
+                vk::WriteDescriptorSet::default()
+                    .dst_set(desc_set)
+                    .dst_binding(2)
+                    .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                    .buffer_info(std::slice::from_ref(&buf_c_info)),
+            ];
+
+            unsafe { self.device.update_descriptor_sets(&writes, &[]); }
+
+            let cmd_pool = unsafe {
+                self.device.create_command_pool(
+                    &vk::CommandPoolCreateInfo::default().queue_family_index(self.queue_family_index),
+                    None,
+                ).map_err(|e| format!("create_command_pool failed: {}", e))?
+            };
+
+            let cmd_buf = unsafe {
+                self.device.allocate_command_buffers(
+                    &vk::CommandBufferAllocateInfo::default().command_pool(cmd_pool).level(vk::CommandBufferLevel::PRIMARY).command_buffer_count(1),
+                ).map_err(|e| format!("allocate_command_buffers failed: {}", e))?[0]
+            };
+
+            let pc = GaCl3BatchPushConstants::new(n as u32, op_code);
+
+            unsafe {
+                self.device.begin_command_buffer(cmd_buf, &vk::CommandBufferBeginInfo::default().flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT))
+                    .map_err(|e| format!("begin_command_buffer failed: {}", e))?;
+                self.device.cmd_bind_pipeline(cmd_buf, vk::PipelineBindPoint::COMPUTE, pipeline);
+                self.device.cmd_bind_descriptor_sets(cmd_buf, vk::PipelineBindPoint::COMPUTE, pipeline_layout, 0, &[desc_set], &[]);
+                self.device.cmd_push_constants(cmd_buf, pipeline_layout, vk::ShaderStageFlags::COMPUTE, 0, bytemuck::bytes_of(&pc));
+                let workgroups = ((n as u32) + 63) / 64;
+                self.device.cmd_dispatch(cmd_buf, workgroups, 1, 1);
+                self.device.end_command_buffer(cmd_buf)
+                    .map_err(|e| format!("end_command_buffer failed: {}", e))?;
+            }
+
+            let fence = unsafe { self.device.create_fence(&vk::FenceCreateInfo::default(), None).map_err(|e| format!("create_fence failed: {}", e))? };
+            unsafe {
+                self.device.queue_submit(self.compute_queue, &[vk::SubmitInfo::default().command_buffers(&[cmd_buf])], fence)
+                    .map_err(|e| format!("queue_submit failed: {}", e))?;
+                self.device.wait_for_fences(&[fence], true, u64::MAX)
+                    .map_err(|e| format!("wait_for_fences failed: {}", e))?;
+            }
+
+            let mut results = vec![[0.0f32; 8]; n];
+            unsafe {
+                let ptr = self.device.map_memory(c_mem, 0, size, vk::MemoryMapFlags::empty())
+                    .map_err(|e| format!("map_memory failed: {}", e))? as *const [f32; 8];
+                std::ptr::copy_nonoverlapping(ptr, results.as_mut_ptr(), n);
+                self.device.unmap_memory(c_mem);
+            }
+
+            unsafe {
+                self.device.destroy_fence(fence, None);
+                self.device.destroy_command_pool(cmd_pool, None);
+                self.device.destroy_descriptor_pool(desc_pool, None);
+                self.device.destroy_pipeline(pipeline, None);
+                self.device.destroy_pipeline_layout(pipeline_layout, None);
+                self.device.destroy_shader_module(shader_module, None);
+                self.device.destroy_descriptor_set_layout(desc_layout, None);
+                self.device.destroy_buffer(a_buf, None);
+                self.device.free_memory(a_mem, None);
+                self.device.destroy_buffer(b_buf, None);
+                self.device.free_memory(b_mem, None);
+                self.device.destroy_buffer(c_buf, None);
+                self.device.free_memory(c_mem, None);
+            }
+
+            Ok(results)
+        }
+
+        /// Dispatches Poincare/Hyperbolic batch operations (Mobius Add, Inversion, Distance) on GPU VRAM.
+        pub fn dispatch_poincare_batch(
+            &self,
+            u: &[[f32; 3]],
+            v: &[[f32; 3]],
+            op_code: u32,
+            sphere_center: [f32; 3],
+            sphere_radius: f32,
+        ) -> Result<Vec<[f32; 3]>, String> {
+            let n = u.len();
+            if n == 0 {
+                return Ok(Vec::new());
+            }
+
+            let size = (n * std::mem::size_of::<[f32; 3]>()) as vk::DeviceSize;
+
+            let (u_buf, u_mem) = self.create_buffer(
+                size,
+                vk::BufferUsageFlags::STORAGE_BUFFER,
+                vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
+            )?;
+
+            let (v_buf, v_mem) = self.create_buffer(
+                size,
+                vk::BufferUsageFlags::STORAGE_BUFFER,
+                vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
+            )?;
+
+            let (out_buf, out_mem) = self.create_buffer(
+                size,
+                vk::BufferUsageFlags::STORAGE_BUFFER,
+                vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
+            )?;
+
+            unsafe {
+                let ptr_u = self.device.map_memory(u_mem, 0, size, vk::MemoryMapFlags::empty())
+                    .map_err(|e| format!("map u_mem failed: {}", e))? as *mut [f32; 3];
+                std::ptr::copy_nonoverlapping(u.as_ptr(), ptr_u, n);
+                self.device.unmap_memory(u_mem);
+
+                if !v.is_empty() {
+                    let ptr_v = self.device.map_memory(v_mem, 0, size, vk::MemoryMapFlags::empty())
+                        .map_err(|e| format!("map v_mem failed: {}", e))? as *mut [f32; 3];
+                    std::ptr::copy_nonoverlapping(v.as_ptr(), ptr_v, v.len().min(n));
+                    self.device.unmap_memory(v_mem);
+                }
+            }
+
+            let bindings = [
+                vk::DescriptorSetLayoutBinding::default()
+                    .binding(0)
+                    .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                    .descriptor_count(1)
+                    .stage_flags(vk::ShaderStageFlags::COMPUTE),
+                vk::DescriptorSetLayoutBinding::default()
+                    .binding(1)
+                    .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                    .descriptor_count(1)
+                    .stage_flags(vk::ShaderStageFlags::COMPUTE),
+                vk::DescriptorSetLayoutBinding::default()
+                    .binding(2)
+                    .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                    .descriptor_count(1)
+                    .stage_flags(vk::ShaderStageFlags::COMPUTE),
+            ];
+
+            let desc_layout = unsafe {
+                self.device.create_descriptor_set_layout(
+                    &vk::DescriptorSetLayoutCreateInfo::default().bindings(&bindings),
+                    None,
+                ).map_err(|e| format!("create_descriptor_set_layout failed: {}", e))?
+            };
+
+            let push_range = vk::PushConstantRange::default()
+                .stage_flags(vk::ShaderStageFlags::COMPUTE)
+                .offset(0)
+                .size(std::mem::size_of::<PoincareBatchPushConstants>() as u32);
+
+            let pipeline_layout = unsafe {
+                self.device.create_pipeline_layout(
+                    &vk::PipelineLayoutCreateInfo::default()
+                        .set_layouts(&[desc_layout])
+                        .push_constant_ranges(&[push_range]),
+                    None,
+                ).map_err(|e| format!("create_pipeline_layout failed: {}", e))?
+            };
+
+            let shader_module = self.create_shader_module(POINCARE_MOBIUS_BATCH_SPV)?;
+            let entry_name = CStr::from_bytes_with_nul(b"main\0").unwrap();
+            let stage_info = vk::PipelineShaderStageCreateInfo::default()
+                .stage(vk::ShaderStageFlags::COMPUTE)
+                .module(shader_module)
+                .name(entry_name);
+
+            let pipeline = unsafe {
+                self.device.create_compute_pipelines(
+                    vk::PipelineCache::null(),
+                    &[vk::ComputePipelineCreateInfo::default().stage(stage_info).layout(pipeline_layout)],
+                    None,
+                ).map_err(|(_, e)| format!("create_compute_pipelines failed: {:?}", e))?[0]
+            };
+
+            let pool_size = vk::DescriptorPoolSize::default()
+                .ty(vk::DescriptorType::STORAGE_BUFFER)
+                .descriptor_count(3);
+
+            let desc_pool = unsafe {
+                self.device.create_descriptor_pool(
+                    &vk::DescriptorPoolCreateInfo::default().max_sets(1).pool_sizes(&[pool_size]),
+                    None,
+                ).map_err(|e| format!("create_descriptor_pool failed: {}", e))?
+            };
+
+            let desc_set = unsafe {
+                self.device.allocate_descriptor_sets(
+                    &vk::DescriptorSetAllocateInfo::default().descriptor_pool(desc_pool).set_layouts(&[desc_layout]),
+                ).map_err(|e| format!("allocate_descriptor_sets failed: {}", e))?[0]
+            };
+
+            let buf_u_info = vk::DescriptorBufferInfo::default().buffer(u_buf).offset(0).range(size);
+            let buf_v_info = vk::DescriptorBufferInfo::default().buffer(v_buf).offset(0).range(size);
+            let buf_out_info = vk::DescriptorBufferInfo::default().buffer(out_buf).offset(0).range(size);
+
+            let writes = [
+                vk::WriteDescriptorSet::default()
+                    .dst_set(desc_set)
+                    .dst_binding(0)
+                    .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                    .buffer_info(std::slice::from_ref(&buf_u_info)),
+                vk::WriteDescriptorSet::default()
+                    .dst_set(desc_set)
+                    .dst_binding(1)
+                    .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                    .buffer_info(std::slice::from_ref(&buf_v_info)),
+                vk::WriteDescriptorSet::default()
+                    .dst_set(desc_set)
+                    .dst_binding(2)
+                    .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                    .buffer_info(std::slice::from_ref(&buf_out_info)),
+            ];
+
+            unsafe { self.device.update_descriptor_sets(&writes, &[]); }
+
+            let cmd_pool = unsafe {
+                self.device.create_command_pool(
+                    &vk::CommandPoolCreateInfo::default().queue_family_index(self.queue_family_index),
+                    None,
+                ).map_err(|e| format!("create_command_pool failed: {}", e))?
+            };
+
+            let cmd_buf = unsafe {
+                self.device.allocate_command_buffers(
+                    &vk::CommandBufferAllocateInfo::default().command_pool(cmd_pool).level(vk::CommandBufferLevel::PRIMARY).command_buffer_count(1),
+                ).map_err(|e| format!("allocate_command_buffers failed: {}", e))?[0]
+            };
+
+            let pc = PoincareBatchPushConstants::new(n as u32, op_code, sphere_center, sphere_radius);
+
+            unsafe {
+                self.device.begin_command_buffer(cmd_buf, &vk::CommandBufferBeginInfo::default().flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT))
+                    .map_err(|e| format!("begin_command_buffer failed: {}", e))?;
+                self.device.cmd_bind_pipeline(cmd_buf, vk::PipelineBindPoint::COMPUTE, pipeline);
+                self.device.cmd_bind_descriptor_sets(cmd_buf, vk::PipelineBindPoint::COMPUTE, pipeline_layout, 0, &[desc_set], &[]);
+                self.device.cmd_push_constants(cmd_buf, pipeline_layout, vk::ShaderStageFlags::COMPUTE, 0, bytemuck::bytes_of(&pc));
+                let workgroups = ((n as u32) + 63) / 64;
+                self.device.cmd_dispatch(cmd_buf, workgroups, 1, 1);
+                self.device.end_command_buffer(cmd_buf)
+                    .map_err(|e| format!("end_command_buffer failed: {}", e))?;
+            }
+
+            let fence = unsafe { self.device.create_fence(&vk::FenceCreateInfo::default(), None).map_err(|e| format!("create_fence failed: {}", e))? };
+            unsafe {
+                self.device.queue_submit(self.compute_queue, &[vk::SubmitInfo::default().command_buffers(&[cmd_buf])], fence)
+                    .map_err(|e| format!("queue_submit failed: {}", e))?;
+                self.device.wait_for_fences(&[fence], true, u64::MAX)
+                    .map_err(|e| format!("wait_for_fences failed: {}", e))?;
+            }
+
+            let mut results = vec![[0.0f32; 3]; n];
+            unsafe {
+                let ptr = self.device.map_memory(out_mem, 0, size, vk::MemoryMapFlags::empty())
+                    .map_err(|e| format!("map_memory failed: {}", e))? as *const [f32; 3];
+                std::ptr::copy_nonoverlapping(ptr, results.as_mut_ptr(), n);
+                self.device.unmap_memory(out_mem);
+            }
+
+            unsafe {
+                self.device.destroy_fence(fence, None);
+                self.device.destroy_command_pool(cmd_pool, None);
+                self.device.destroy_descriptor_pool(desc_pool, None);
+                self.device.destroy_pipeline(pipeline, None);
+                self.device.destroy_pipeline_layout(pipeline_layout, None);
+                self.device.destroy_shader_module(shader_module, None);
+                self.device.destroy_descriptor_set_layout(desc_layout, None);
+                self.device.destroy_buffer(u_buf, None);
+                self.device.free_memory(u_mem, None);
+                self.device.destroy_buffer(v_buf, None);
+                self.device.free_memory(v_mem, None);
                 self.device.destroy_buffer(out_buf, None);
                 self.device.free_memory(out_mem, None);
             }

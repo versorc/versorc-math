@@ -11,6 +11,8 @@ fn test_vulkan_spirv_shaders_integrity() {
         ("HOT_STRATUM_E8_SPV", HOT_STRATUM_E8_SPV),
         ("PGA_TRANSFORM_SPV", PGA_TRANSFORM_SPV),
         ("CGA_TRANSFORM_SPV", CGA_TRANSFORM_SPV),
+        ("GA_CL3_BATCH_SPV", GA_CL3_BATCH_SPV),
+        ("POINCARE_MOBIUS_BATCH_SPV", POINCARE_MOBIUS_BATCH_SPV),
     ];
 
     for &(name, spv) in shaders {

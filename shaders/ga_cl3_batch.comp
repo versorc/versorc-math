@@ -1,0 +1,89 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+
+#include "include/versorc_ga.glsl"
+
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+layout(push_constant) uniform BatchPushConstants {
+    uint num_elements;
+    uint op_code; // 0=GP, 1=Wedge, 2=LeftContract, 3=Hestenes, 4=Meet, 5=Commutator, 6=Anticommutator, 7=Sandwich, 8=Dual, 9=Reverse, 10=Involution, 11=Conjugation
+    uint _pad0;
+    uint _pad1;
+} params;
+
+// SoA or packed struct of 8 floats
+layout(std430, set = 0, binding = 0) readonly buffer InputA {
+    float a_coords[]; // 8 floats per multivector
+};
+
+layout(std430, set = 0, binding = 1) readonly buffer InputB {
+    float b_coords[]; // 8 floats per multivector
+};
+
+layout(std430, set = 0, binding = 2) writeonly buffer OutputC {
+    float c_coords[]; // 8 floats per multivector
+};
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    if (idx >= params.num_elements) return;
+
+    uint base = idx * 8;
+    Cl3MV a;
+    for (int i = 0; i < 8; ++i) {
+        a.c[i] = a_coords[base + i];
+    }
+
+    Cl3MV b;
+    for (int i = 0; i < 8; ++i) {
+        b.c[i] = b_coords[base + i];
+    }
+
+    Cl3MV result;
+    switch (params.op_code) {
+        case 0: // Geometric Product
+            result = cl3_geometric_product(a, b);
+            break;
+        case 1: // Wedge Product
+            result = cl3_wedge(a, b);
+            break;
+        case 2: // Left Contraction
+            result = cl3_left_contraction(a, b);
+            break;
+        case 3: // Hestenes Inner
+            result = cl3_hestenes_inner(a, b);
+            break;
+        case 4: // Regressive Meet
+            result = cl3_regressive_meet(a, b);
+            break;
+        case 5: // Lie Commutator
+            result = cl3_commutator(a, b);
+            break;
+        case 6: // Jordan Anticommutator
+            result = cl3_anticommutator(a, b);
+            break;
+        case 7: // Versor Sandwich (a x a~)
+            result = cl3_sandwich(a, b);
+            break;
+        case 8: // Hodge Dual
+            result = cl3_hodge_dual(a);
+            break;
+        case 9: // Reversion
+            result = cl3_reverse(a);
+            break;
+        case 10: // Grade Involution
+            result = cl3_involution(a);
+            break;
+        case 11: // Clifford Conjugation
+            result = cl3_conjugation(a);
+            break;
+        default:
+            result = cl3_zero();
+            break;
+    }
+
+    for (int i = 0; i < 8; ++i) {
+        c_coords[base + i] = result.c[i];
+    }
+}

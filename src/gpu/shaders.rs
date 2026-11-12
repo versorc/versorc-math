@@ -14,6 +14,8 @@ pub const VEC_ADD_SPV: &[u8] = include_bytes!("../../shaders/vec_add.spv");
 pub const HOT_STRATUM_E8_SPV: &[u8] = include_bytes!("../../shaders/hot_stratum_e8.spv");
 pub const PGA_TRANSFORM_SPV: &[u8] = include_bytes!("../../shaders/pga_transform.spv");
 pub const CGA_TRANSFORM_SPV: &[u8] = include_bytes!("../../shaders/cga_transform.spv");
+pub const GA_CL3_BATCH_SPV: &[u8] = include_bytes!("../../shaders/ga_cl3_batch.spv");
+pub const POINCARE_MOBIUS_BATCH_SPV: &[u8] = include_bytes!("../../shaders/poincare_mobius_batch.spv");
 
 /// Push constant payload for Planar Spinor Bank (RoPE) compute shader.
 #[repr(C)]
@@ -181,4 +183,56 @@ pub struct CgaTransformPushConstants {
     pub _pad0: u32,
     pub _pad1: u32,
     pub _pad2: u32,
+}
+
+/// Push constant payload for unified Cl(3, 0) multivector batch operations on GPU.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "vulkan", derive(bytemuck::Pod, bytemuck::Zeroable))]
+pub struct GaCl3BatchPushConstants {
+    pub num_elements: u32,
+    pub op_code: u32,
+    pub _pad0: u32,
+    pub _pad1: u32,
+}
+
+impl GaCl3BatchPushConstants {
+    pub fn new(num_elements: u32, op_code: u32) -> Self {
+        Self {
+            num_elements,
+            op_code,
+            _pad0: 0,
+            _pad1: 0,
+        }
+    }
+}
+
+/// Push constant payload for Poincare hyperbolic and conformal batch operations on GPU.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "vulkan", derive(bytemuck::Pod, bytemuck::Zeroable))]
+pub struct PoincareBatchPushConstants {
+    pub num_elements: u32,
+    pub op_code: u32,
+    pub sphere_cx: f32,
+    pub sphere_cy: f32,
+    pub sphere_cz: f32,
+    pub sphere_radius: f32,
+    pub _pad0: u32,
+    pub _pad1: u32,
+}
+
+impl PoincareBatchPushConstants {
+    pub fn new(num_elements: u32, op_code: u32, sphere_center: [f32; 3], sphere_radius: f32) -> Self {
+        Self {
+            num_elements,
+            op_code,
+            sphere_cx: sphere_center[0],
+            sphere_cy: sphere_center[1],
+            sphere_cz: sphere_center[2],
+            sphere_radius,
+            _pad0: 0,
+            _pad1: 0,
+        }
+    }
 }
