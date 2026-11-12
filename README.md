@@ -22,7 +22,6 @@
 [![Crates.io](https://img.shields.io/crates/v/versorc-math.svg)](https://crates.io/crates/versorc-math)
 [![PyPI](https://img.shields.io/pypi/v/versorc-math.svg)](https://pypi.org/project/versorc-math/)
 [![Documentation](https://docs.rs/versorc-math/badge.svg)](https://docs.rs/versorc-math)
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.1234567.svg)](https://doi.org/10.5281/zenodo.1234567)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/versorc/versorc-math/pulls)
 [![Community](https://img.shields.io/badge/Community-Open_Source-purple.svg)](https://github.com/versorc/versorc-math)
 
@@ -34,7 +33,7 @@ The project is released under the **Apache License 2.0** to foster an open, coll
 
 ## Table of Contents
 1. [Taxonomy of Clifford Geometric Algebra Operators](#taxonomy-of-clifford-geometric-algebra-operators)
-2. [Canonical Mathematical Literature & Theoretical Mapping](#canonical-mathematical-literature--theoretical-mapping)
+2. [Canonical Literature & Theoretical Foundations](#canonical-literature--theoretical-foundations)
 3. [Scientific Visual Gallery & Simulations](#scientific-visual-gallery--simulations)
 4. [Mathematical Foundations & Signatures](#mathematical-foundations--signatures)
 5. [Quickstart Guides (Rust & Python / NumPy)](#quickstart-guides)
@@ -50,63 +49,49 @@ The project is released under the **Apache License 2.0** to foster an open, coll
 
 `versorc-math` provides a complete, unified hierarchy of geometric operations across vector spaces and multivector grades:
 
-| Operator Name | Canonical Symbol | Rust API | Python / NumPy API | Grade Shift ($\Delta\text{grade}$) | Mathematical Definition | Canonical Reference |
-| :--- | :---: | :--- | :--- | :---: | :--- | :--- |
-| **Geometric Product** | $A B$ | `a * b`, `a.geometric_product(&b)` | `a * b` | Mixed ($\sum \langle AB \rangle_k$) | $AB = A \cdot B + A \wedge B$ (vectors) | Clifford (1878), Hestenes (1984) §1.1 |
-| **Outer / Wedge Product** | $A \wedge B$ | `a.wedge(&b)` | `a ^ b` | Grade addition ($r + s$) | Multivector exterior product, anticommutative on 1-blades | Grassmann (1844), Hestenes §1.2 |
-| **Left Contraction** | $A \rfloor B$ | `a.left_contraction(&b)` | `a \| b` | Grade subtraction ($s - r, r \le s$) | Contraction dual to wedge: $(A \wedge C) \cdot B = C \cdot (A \rfloor B)$ | Lounesto (2001) §3.1, Dorst (2007) §4.2 |
-| **Hestenes Inner Product** | $A \cdot B$ | `a.hestenes_inner_product(&b)` | `a.hestenes_dot(b)` | Symmetric contraction ($\|r - s\|$) | $\frac{1}{2}(AB + BA)$ for 1-vectors | Hestenes & Sobczyk (1984) §1.2 |
-| **Regressive / Meet Product** | $A \vee B$ | `a.regressive_product(&b)` | `a.regressive(b)` | Intersection blade ($r + s - n$) | $A \vee B = (A^* \wedge B^*)^{*-1}$ | Dorst et al. (2007) §5.3, Hestenes §2.3 |
-| **Hodge / Pseudoscalar Dual** | $*A = A I^{-1}$ | `a.dual()`, `a.undual()` | `a.dual()`, `a.undual()` | Orthogonal complement ($n - r$) | Multiplication by inverted pseudoscalar $I^{-1}$ | Hestenes & Sobczyk (1984) §1.4 |
-| **Clifford Reversion** | $A^\sim$ / $A^\dagger$ | `a.reverse()` | `~a`, `a.reverse()` | Sign parity: $(-1)^{k(k-1)/2}$ | Blade order reversal: $(e_{i_1}\dots e_{i_k})^\sim = e_{i_k}\dots e_{i_1}$ | Lounesto (2001) §2.4, Dorst §3.6 |
-| **Grade Involution** | $\widehat{A}$ | `a.grade_involution()` | `a.involution()` | Parity sign: $(-1)^k \langle A \rangle_k$ | Main automorphism: $\widehat{u v} = \widehat{u}\widehat{v}, \widehat{v} = -v$ | Hestenes (1984) §1.3, Lounesto §2.4 |
-| **Clifford Conjugation** | $\overline{A}$ | `a.conjugation()` | `a.conjugation()` | Composition: $(\widehat{A})^\sim$ | Combines main involution and reversion | Lounesto (2001) §2.4 |
-| **Versor Sandwich Product** | $V x V^{-1}$ | `v.sandwich(&x)` | `v.sandwich(x)` | Grade invariant automorphism | Outermorphism action $R x R^\sim$ on arbitrary blades | Cartan (1938), Hestenes (1984) §3.2 |
-| **Lie Commutator** | $A \times B = \frac{1}{2}[A, B]$ | `a.commutator(&b)` | `a.commutator(b)` | Lie bracket on bivectors | $\frac{1}{2}(AB - BA)$, satisfies Jacobi identity | Doran & Lasenby (2003) §2.4 |
-| **Anticommutator** | $\frac{1}{2}\{A, B\}$ | `a.anticommutator(&b)` | `a.anticommutator(b)` | Jordan algebra generator | $\frac{1}{2}(AB + BA)$ | Lounesto (2001) §3.3 |
-| **Conformal Spherical Inversion** | $P' = S P S^{-1}$ | `sphere.invert_in_sphere(&p)` | `sphere.invert_in_sphere(p)` | Radial inversion: $r' = R^2 / r$ | 1-versor sandwich across conformal sphere | Dorst, Fontijne, Mann (2007) §14.3 |
-| **Möbius Gyrovector Addition** | $u \oplus v$ | `u.mobius_add(&v)` | `u.mobius_add(v)` | Non-associative gyrovector sum | $\frac{(1 + 2\langle u,v \rangle + \|v\|^2)u + (1 - \|u\|^2)v}{1 + 2\langle u,v \rangle + \|u\|^2 \|v\|^2}$ | Ungar (2008) §2.2, Ratcliffe (2019) §4.5 |
-| **Einstein Hyperbolic Midpoint** | $\mu_E(u_1..u_K)$ | `PoincarePoint::einstein_midpoint(&pts, &w)` | `PoincarePoint.einstein_midpoint(pts, w)` | Conformal center of mass in $B^d$ | Projective weighted mean in Beltrami-Klein $\mathbb{K}^d$ | Ungar (2008) §6.1, Ratcliffe §4.6 |
+| Operator Name | Canonical Symbol | Rust API | Python / NumPy API | Grade Shift ($\Delta\text{grade}$) | Mathematical Definition |
+| :--- | :---: | :--- | :--- | :---: | :--- |
+| **Geometric Product** | $A B$ | `a * b`, `a.geometric_product(&b)` | `a * b` | Mixed ($\sum \langle AB \rangle_k$) | $AB = A \cdot B + A \wedge B$ (vectors) |
+| **Outer / Wedge Product** | $A \wedge B$ | `a.wedge(&b)` | `a ^ b` | Grade addition ($r + s$) | Multivector exterior product, anticommutative on 1-blades |
+| **Left Contraction** | $A \rfloor B$ | `a.left_contraction(&b)` | `a \| b` | Grade subtraction ($s - r, r \le s$) | Contraction dual to wedge: $(A \wedge C) \cdot B = C \cdot (A \rfloor B)$ |
+| **Hestenes Inner Product** | $A \cdot B$ | `a.hestenes_inner_product(&b)` | `a.hestenes_dot(b)` | Symmetric contraction ($\|r - s\|$) | $\frac{1}{2}(AB + BA)$ for 1-vectors |
+| **Regressive / Meet Product** | $A \vee B$ | `a.regressive_product(&b)` | `a.regressive(b)` | Intersection blade ($r + s - n$) | $A \vee B = (A^* \wedge B^*)^{*-1}$ |
+| **Hodge / Pseudoscalar Dual** | $*A = A I^{-1}$ | `a.dual()`, `a.undual()` | `a.dual()`, `a.undual()` | Orthogonal complement ($n - r$) | Multiplication by inverted pseudoscalar $I^{-1}$ |
+| **Clifford Reversion** | $A^\sim$ / $A^\dagger$ | `a.reverse()` | `~a`, `a.reverse()` | Sign parity: $(-1)^{k(k-1)/2}$ | Blade order reversal: $(e_{i_1}\dots e_{i_k})^\sim = e_{i_k}\dots e_{i_1}$ |
+| **Grade Involution** | $\widehat{A}$ | `a.grade_involution()` | `a.involution()` | Parity sign: $(-1)^k \langle A \rangle_k$ | Main automorphism: $\widehat{u v} = \widehat{u}\widehat{v}, \widehat{v} = -v$ |
+| **Clifford Conjugation** | $\overline{A}$ | `a.conjugation()` | `a.conjugation()` | Composition: $(\widehat{A})^\sim$ | Combines main involution and reversion |
+| **Versor Sandwich Product** | $V x V^{-1}$ | `v.sandwich(&x)` | `v.sandwich(x)` | Grade invariant automorphism | Outermorphism action $R x R^\sim$ on arbitrary blades |
+| **Lie Commutator** | $A \times B = \frac{1}{2}[A, B]$ | `a.commutator(&b)` | `a.commutator(b)` | Lie bracket on bivectors | $\frac{1}{2}(AB - BA)$, satisfies Jacobi identity |
+| **Anticommutator** | $\frac{1}{2}\{A, B\}$ | `a.anticommutator(&b)` | `a.anticommutator(b)` | Jordan algebra generator | $\frac{1}{2}(AB + BA)$ |
+| **Conformal Spherical Inversion** | $P' = S P S^{-1}$ | `sphere.invert_in_sphere(&p)` | `sphere.invert_in_sphere(p)` | Radial inversion: $r' = R^2 / r$ | 1-versor sandwich across conformal sphere |
+| **Möbius Gyrovector Addition** | $u \oplus v$ | `u.mobius_add(&v)` | `u.mobius_add(v)` | Non-associative gyrovector sum | $\frac{(1 + 2\langle u,v \rangle + \|v\|^2)u + (1 - \|u\|^2)v}{1 + 2\langle u,v \rangle + \|u\|^2 \|v\|^2}$ |
+| **Einstein Hyperbolic Midpoint** | $\mu_E(u_1..u_K)$ | `PoincarePoint::einstein_midpoint(&pts, &w)` | `PoincarePoint.einstein_midpoint(pts, w)` | Conformal center of mass in $B^d$ | Projective weighted mean in Beltrami-Klein $\mathbb{K}^d$ |
+
+> [!NOTE]
+> For complete mathematical proofs, axioms, and grade shift derivations for each operator, see [explanations/02_clifford_operators_and_products.md](explanations/02_clifford_operators_and_products.md).
 
 ---
 
-## Canonical Mathematical Literature & Theoretical Mapping
+## Canonical Literature & Theoretical Foundations
 
-Every algorithmic component in `versorc-math` is grounded in established literature:
+Every algorithm and operator in `versorc-math` is strictly grounded in established literature:
 
-### 1. Euclidean Space $\mathcal{Cl}(3,0)$ & Planar Algebra $\mathcal{Cl}(2,0)$
-* **Literature**: Hestenes, D., Sobczyk, G. (1984), *Clifford Algebra to Geometric Calculus*, D. Reidel Publishing Company (Chapters 1 & 2: Multivectors and Axioms); Doran, C., Lasenby, A. (2003), *Geometric Algebra for Physicists*, Cambridge University Press (Chapter 2: Geometric Algebra).
-* **Engine Implementation**: [src/multivector.rs](file:///home/cyclop/Projects/n/versorc/00_versorc-math/src/multivector.rs) provides the general multivector structures `Cl3` and `Cl2`, closed-form analytical determinant inverses, and exact grade projections $\langle A \rangle_k$.
+* **Euclidean & Multivector Algebra ($\mathcal{Cl}_{3,0}, \mathcal{Cl}_{2,0}$)**: Hestenes & Sobczyk (1984), Doran & Lasenby (2003), Clifford (1878).
+* **3D Projective Geometric Algebra ($\mathcal{Cl}^*_{3,0,1}$)**: Chasles (1830), Selig (2005), Dorst et al. (2007), Gunn (2019).
+* **3D Conformal Geometric Algebra ($\mathcal{Cl}_{4,1}$)**: Dorst, Fontijne & Mann (2007), Hestenes (2001), Li et al. (2001).
+* **4D Spacetime Algebra & Lounesto Spinors ($\mathcal{Cl}_{1,3}$)**: Lounesto (2001), Doran & Lasenby (2003), Rodrigues & Oliveira (2007).
+* **Gosset $E_8$ Root Lattice & Fast Decoding**: Conway & Sloane (1999), Coxeter (1973), Bourbaki (1968).
+* **TurboQuant & Dyadic Versors**: Max (1960), Lloyd (1982), Walsh (1923), Ailon & Chazelle (2006).
+* **Conformal Hyperbolic Geometry ($\mathbb{B}^d$)**: Ungar (2008), Ratcliffe (2019), Beltrami (1868), Klein (1871).
 
-### 2. 3D Projective Geometric Algebra (PGA) $\mathcal{Cl}^*(3,0,1)$
-* **Literature**: Chasles, M. (1830), *Note sur les propriétés générales du système de deux corps*; Selig, J.M. (2005), *Geometric Fundamentals of Robotics*, Springer (Chapter 9: Lie Groups and Screw Theory); Dorst, L., Fontijne, D., Mann, S. (2007), *Geometric Algebra for Computer Science*, Morgan Kaufmann (Chapter 11: 3D Projective Geometric Algebra).
-* **Engine Implementation**: [src/pga/motor.rs](file:///home/cyclop/Projects/n/versorc/00_versorc-math/src/pga/motor.rs), [src/pga/line.rs](file:///home/cyclop/Projects/n/versorc/00_versorc-math/src/pga/line.rs), [src/pga/plane.rs](file:///home/cyclop/Projects/n/versorc/00_versorc-math/src/pga/plane.rs), and [src/pga/point.rs](file:///home/cyclop/Projects/n/versorc/00_versorc-math/src/pga/point.rs). Implements the dual-quaternion $\text{Spin}(3,0,1)$ isomorphism, analytic Plücker line extraction, and the exponential screw linear interpolation ($\text{ScLERP}$).
-
-### 3. 3D Conformal Geometric Algebra (CGA) $\mathcal{Cl}(4,1)$
-* **Literature**: Dorst, L., Fontijne, D., Mann, S. (2007), Chapters 13–15 (Conformal Geometric Algebra); Hestenes, D. (2001), *Old Wine in New Bottles: A New Algebraic Framework for Computational Geometry*.
-* **Engine Implementation**: [src/cga/mod.rs](file:///home/cyclop/Projects/n/versorc/00_versorc-math/src/cga/mod.rs) implements the 5D Minkowski null basis $\{e_1, e_2, e_3, n_o, n_\infty\}$ with $n_o^2 = n_\infty^2 = 0, n_o \cdot n_\infty = -1$. Embeds points, spheres, planes, point-pairs, and circles with sphere-plane intersections $C^* = S^* \wedge \Pi^*$ and conformal inversions $P' = S P S^{-1}$.
-
-### 4. 4D Spacetime Algebra (STA) $\mathcal{Cl}(1,3)$ & Lounesto Spinors
-* **Literature**: Lounesto, P. (2001), *Clifford Algebras and Spinors*, London Mathematical Society Lecture Note Series 286, Cambridge University Press (Chapter 12: Spinor Fields and Classification); Doran & Lasenby (2003), Chapter 8 (Spacetime Algebra); Rodrigues, W.A., Oliveira, E.C. (2007), *The Many Faces of Maxwell, Dirac and Einstein Equations*.
-* **Engine Implementation**: [src/sta/mod.rs](file:///home/cyclop/Projects/n/versorc/00_versorc-math/src/sta/mod.rs). Computes the 16-component multivector in $\mathcal{Cl}(1,3)$, evaluates all 5 bilinear covariants ($\sigma, \omega, J, S, K$), and deterministically classifies any general spinor into the **6 Lounesto Spinor Classes** (Dirac Electron, Dirac Pseudoscalar, Flag-Dipole, Majorana Flag-Pole, and Weyl Dipole).
-
-### 5. Gosset $E_8$ Root Lattice & Conway-Sloane Fast Decoder
-* **Literature**: Conway, J.H., Sloane, N.J.A. (1999), *Sphere Packings, Lattices and Groups*, Springer Grundlehren der mathematischen Wissenschaften 290 (Chapter 8: The Gosset Lattice $E_8$); Coxeter, H.S.M. (1973), *Regular Polytopes*, Dover Publications (Chapters 11–13); Bourbaki, N. (1968), *Groupes et algèbres de Lie*, Hermann, Paris (Planche VII: Système de racines de type $E_8$).
-* **Engine Implementation**: [src/lattice/e8.rs](file:///home/cyclop/Projects/n/versorc/00_versorc-math/src/lattice/e8.rs). Generates all 240 minimal roots ($\|r\|^2 = 2.0$) in $\mathbb{R}^8$ ($D_8 \cup (D_8 + \frac{1}{2}\mathbf{1})$), projects onto the exact Coxeter plane eigenspace ($\lambda = e^{\pm 2\pi i / 30}$), and executes the linear $O(8)$ Conway-Sloane closest-vector decoding.
-
-### 6. TurboQuant: Dyadic Versor Isometry & Lloyd-Max Centroids
-* **Literature**: Max, J. (1960), *Quantizing for Minimum Distortion*, IRE Transactions on Information Theory, 6(1):7-12; Lloyd, S. (1982), *Least Squares Quantization in PCM*, IEEE Transactions on Information Theory, 28(2):129-137.
-* **Engine Implementation**: [src/quantization/clifford_3bit.rs](file:///home/cyclop/Projects/n/versorc/00_versorc-math/src/quantization/clifford_3bit.rs) and [src/versor/dyadic.rs](file:///home/cyclop/Projects/n/versorc/00_versorc-math/src/versor/dyadic.rs). Eliminates activation/weight outlier kurtosis via randomized Walsh-Hadamard versor rotations, packing 128 weights into hardware-aligned 64-byte cache lines with 8 precomputed Lloyd-Max centroids for $\mathcal{N}(0, 1)$.
-
-### 7. Conformal Hyperbolic Geometry & Poincaré Ball
-* **Literature**: Ungar, A.A. (2008), *Analytic Hyperbolic Geometry and Albert Einstein's Special Theory of Relativity*, World Scientific; Ratcliffe, J.G. (2019), *Foundations of Hyperbolic Manifolds*, Graduate Texts in Mathematics 149, Springer.
-* **Engine Implementation**: [src/poincare/mod.rs](file:///home/cyclop/Projects/n/versorc/00_versorc-math/src/poincare/mod.rs). Manages points in $B^d$ ($\|x\| < 1$), calculates exact geodesic distances, evaluates Möbius gyrovector additions, and computes closed-form $O(K)$ Einstein hyperbolic midpoints via projective equivalence in the Beltrami-Klein model.
+> [!TIP]
+> An exhaustive academic bibliography with detailed theorem citations and source mapping is cataloged in [explanations/08_canonical_literature_and_theoretical_foundations.md](explanations/08_canonical_literature_and_theoretical_foundations.md).
 
 ---
 
 ## Scientific Visual Gallery & Simulations
 
-All plots below are generated directly from the mathematical engine via `python3 generate_visual_plots.py`:
+All visual representations below are produced directly by the engine via `python3 generate_visual_plots.py`:
 
 ### 1. 3D Projective Geometric Algebra $\mathcal{Cl}^*(3,0,1)$: SE(3) Rigid Kinematics & Chasles Screw Axis
 Rigid body transformation combining rotation and translation into a single even multivector (motor $M = T R \in \text{Spin}(3,0,1)$). According to **Chasles' Theorem**, any spatial rigid displacement is an invariant screw motion around a unique line $L$ in space with pitch $p$. Geodesic motion is computed via continuous screw linear interpolation ($\text{ScLERP}$): $M(t) = \exp(t \log M)$.
@@ -393,7 +378,6 @@ If you utilize `versorc-math` in your research, academic publications, or open-s
   year         = 2026,
   publisher    = {Zenodo},
   version      = {0.1.0},
-  doi          = {10.5281/zenodo.1234567},
   url          = {https://github.com/versorc/versorc-math}
 }
 ```

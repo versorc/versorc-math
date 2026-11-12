@@ -7,7 +7,7 @@ Welcome to **VersorC Math (`versorc-math`)**, a low-level, high-performance Clif
 ## 1. Mission & Purpose
 
 `versorc-math` provides the mathematical foundation and low-level computational primitives for:
-1. **Clifford Geometric Algebra ($\mathcal{Cl}_{p,q,r}$)**: Exact multivector representations, metric signatures, blade bitmask indexing, geometric products, wedge products, and directional contractions.
+1. **Clifford Geometric Algebra ($\mathcal{Cl}_{p,q,r}$)**: Exact multivector representations, metric signatures, blade bitmask indexing, geometric products, wedge products, directional contractions, and the complete 15-operator taxonomy.
 2. **The Versor Group ($\mathbf{\Gamma}_{p,q}$)**: Hamilton's classical quaternions $\mathbb{H}$, bivector exponential rotors $R = \exp(-B/2)$, and sandwich transformations $V x \widetilde{V}$.
 3. **High-Dimensional Linear Algebra Reduction**: Overcoming the $2^n$ dimension limit of general multivectors by factorizing dense $O(n^2)$ matrices into:
    - **1-Versors (Householder Cascades):** $O(n)$ compute and storage.
@@ -22,12 +22,15 @@ Welcome to **VersorC Math (`versorc-math`)**, a low-level, high-performance Clif
 
 ```
 explanations/
-├── README.md                                         # Architectural Master Map (This Document)
-├── 01_geometric_algebra_and_versors.md               # Clifford Algebras Cl_{p,q,r}, Lipschitz Group, Hamilton Quaternions
-├── 02_clifford_operators_and_products.md              # Geometric, Wedge, Left/Right Contractions, Involutions
-├── 03_high_dimensional_versor_reductions.md          # Householder Cascades, Planar Spinor Banks, Dyadic Walsh-Hadamard
-├── 04_lattice_e8_and_conway_sloane.md                # 240 Minimal Roots of E8, D8 Cosets, Conway-Sloane O(8) Decoder
-└── 05_verification_and_ground_truth_test_battery.md  # Ground-Truth Fixtures, Algebraic Invariants & Tolerances
+├── README.md                                                 # Architectural Master Map (This Document)
+├── 01_geometric_algebra_and_versors.md                       # Clifford Algebras Cl_{p,q,r}, Lipschitz Group, Hamilton Quaternions
+├── 02_clifford_operators_and_products.md                      # Unified 15-Operator Taxonomy, Derivations, and Involutions
+├── 03_high_dimensional_versor_reductions.md                  # Householder Cascades, Planar Spinor Banks, Dyadic Walsh-Hadamard
+├── 04_lattice_e8_and_conway_sloane.md                        # 240 Minimal Roots of E8, D8 Cosets, Conway-Sloane O(8) Decoder
+├── 05_verification_and_ground_truth_test_battery.md          # Ground-Truth Fixtures, Algebraic Invariants & Tolerances
+├── 06_clifford_3bit_turboquant_specification.md              # Hardware 64-Byte Cache Line Packing & Lloyd-Max Centroids
+├── 07_specialized_hardware_kernels_and_design.md             # AVX2/AVX-512 vpermps Streaming and Vulkan Compute Shaders
+└── 08_canonical_literature_and_theoretical_foundations.md    # Exhaustive Academic Bibliography, Theorems & Primary Sources
 ```
 
 ---
@@ -37,13 +40,16 @@ explanations/
 ```
 00_versorc-math/
 ├── Cargo.toml
-├── explanations/
-├── vendor_reference/      # Permissive (MIT / Apache-2.0 / ISC) reference implementations
+├── explanations/          # In-depth theoretical documentation and operator derivations
+├── vendor_reference/      # Permissive (Apache-2.0 / MIT) reference implementations
 ├── src/
 │   ├── lib.rs             # Crate root and prelude
 │   ├── signature.rs       # Const-generic metric signatures (p, q, r)
 │   ├── blade.rs           # Bitmask blade indices and Cayley sign tables
 │   ├── multivector.rs     # Exact multivectors for low/medium dimensions
+│   ├── pga/               # 3D Projective Geometric Algebra Cl*(3,0,1)
+│   ├── cga/               # 3D Conformal Geometric Algebra Cl(4,1)
+│   ├── sta/               # 4D Spacetime Algebra Cl(1,3) & Lounesto Spinors
 │   ├── versor/
 │   │   ├── mod.rs         # VersorAction trait and sandwich operators
 │   │   ├── hamilton.rs    # Hamilton quaternions H, Slerp, S^3 geodesics
@@ -56,15 +62,11 @@ explanations/
 │   │   └── e8.rs          # 240 minimal roots and Conway-Sloane decoder
 │   ├── poincare/
 │   │   └── mod.rs         # Hyperbolic geometry in Poincare Ball B^d
+│   ├── quantization/
+│   │   └── clifford_3bit.rs # Cache-line aligned 3-bit TurboQuant
 │   └── reduction/
 │       ├── mod.rs
 │       └── cartan_dieudonne.rs # Orthogonal matrix factorizer into 1-versores
-└── tests/
-    ├── test_clifford_axioms.rs
-    ├── test_hamilton_quaternions.rs
-    ├── test_versor_sandwich.rs
-    ├── test_householder_cascade.rs
-    ├── test_e8_lattice_roots.rs
-    ├── test_dyadic_walsh.rs
-    └── test_poincare_hyperbolic.rs
+├── shaders/               # Precompiled SPIR-V 1.3+ Vulkan compute kernels
+└── tests/                 # Integration test battery (58 ground-truth test suites)
 ```
