@@ -14,3 +14,6 @@ build/
 dist/
 *.egg-info/
 .eggs/
+.venv/
+uv.lock
+.pytest_cache/

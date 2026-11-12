@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "versorc-math"
-version = "0.1.0"
+version = "0.1.1"
 description = "Clifford Geometric Algebra, Versor Operators, and High-Dimensional Quantization"
 readme = "README.md"
 authors = [{ name = "The VersorC Project Contributors" }]

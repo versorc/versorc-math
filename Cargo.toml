@@ -1,6 +1,6 @@
 [package]
 name = "versorc-math"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["The VersorC Project Contributors"]
 description = "Low-level Clifford Geometric Algebra, Versor Operators, and High-Dimensional Matrix Reductions"
