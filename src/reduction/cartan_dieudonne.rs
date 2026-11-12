@@ -1,6 +1,6 @@
 // ============================================================================
 // VERSORC-MATH: CARTAN-DIEUDONNE DECOMPOSITION INTO 1-VERSORS
-// License: Apache-2.0 OR MIT
+// License: Apache-2.0
 //
 // By the Cartan-Dieudonne theorem, every orthogonal transformation in O(n)
 // can be decomposed into the product of at most n reflections (1-versores):

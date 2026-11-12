@@ -1,6 +1,6 @@
 // ============================================================================
 // VERSORC-MATH: SPECIALIZED HARDWARE COMPUTE KERNELS
-// License: Apache-2.0 OR MIT
+// License: Apache-2.0
 //
 // High-performance hardware kernels designed around Data-Oriented Design (DOD):
 // - clifford_3bit_avx2: AVX2 8-way vpermps + vpsrlvd vectorized dot product for Clifford 3-bit.

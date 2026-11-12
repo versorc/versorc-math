@@ -1,6 +1,6 @@
 // ============================================================================
 // VERSORC-MATH: GOSSET E8 ROOT LATTICE & CONWAY-SLOANE FAST DECODER
-// License: Apache-2.0 OR MIT
+// License: Apache-2.0
 //
 // E8 is the unique even unimodular lattice in dimension 8.
 // Composed of the union of two D8 cosets: E8 = D8 U (D8 + 1/2 * 1).

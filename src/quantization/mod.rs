@@ -1,6 +1,6 @@
 // ============================================================================
 // VERSORC-MATH: CLIFFORD GEOMETRIC QUANTIZATION MODULE
-// License: Apache-2.0 OR MIT
+// License: Apache-2.0
 // ============================================================================
 
 pub mod clifford_3bit;

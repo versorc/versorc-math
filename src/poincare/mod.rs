@@ -1,6 +1,6 @@
 // ============================================================================
 // VERSORC-MATH: CONFORMAL HYPERBOLIC POINCARE BALL (B^d)
-// License: Apache-2.0 OR MIT
+// License: Apache-2.0
 //
 // Conformal Hyperbolic Geometry, Mobius Gyrovector Addition, and Geodesics.
 // Invariant: Points strictly reside within the open unit ball ||x|| < 1.

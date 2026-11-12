@@ -1,6 +1,6 @@
 // ============================================================================
 // VERSORC-MATH: DETERMINISTIC STATIC MATRIX QUANTIZATION AUDIT & OPTIMIZATION
-// License: Apache-2.0 OR MIT
+// License: Apache-2.0
 //
 // Tests 3-bit Clifford and 3.5-bit TurboQuant on a fully deterministic static
 // matrix of 256 rows x 2048 columns (524,288 weights) with heavy LLM outlier channels.

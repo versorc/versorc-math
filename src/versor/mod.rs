@@ -1,6 +1,6 @@
 // ============================================================================
 // VERSORC-MATH: THE VERSOR GROUP & SANDWICH OPERATORS
-// License: Apache-2.0 OR MIT
+// License: Apache-2.0
 // ============================================================================
 
 pub mod hamilton;

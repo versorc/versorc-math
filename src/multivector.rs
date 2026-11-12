@@ -1,6 +1,6 @@
 // ============================================================================
 // VERSORC-MATH: GENERALIZED CLIFFORD MULTIVECTOR IMPLEMENTATION
-// License: Apache-2.0 OR MIT
+// License: Apache-2.0
 // ============================================================================
 
 use std::ops::{Add, AddAssign, Mul, Neg, Sub, SubAssign};

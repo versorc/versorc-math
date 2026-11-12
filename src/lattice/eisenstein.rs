@@ -1,6 +1,6 @@
 // ============================================================================
 // VERSORC-MATH: 3D EISENSTEIN A3 FCC CLOSE-PACKED LATTICE (Z[omega])
-// License: Apache-2.0 OR MIT
+// License: Apache-2.0
 //
 // 3D Gotthold Eisenstein lattice tessellation (A3 root lattice / Face-Centered Cubic).
 // Implements Kepler-optimal sphere packing in dimension 3 with Kissing Number = 12.

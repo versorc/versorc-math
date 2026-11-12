@@ -1,6 +1,6 @@
 # ============================================================================
 # VERSORC-MATH: SCIENTIFIC MATPLOTLIB VISUALIZATION SUITE
-# License: Apache-2.0 OR MIT
+# License: Apache-2.0
 # ============================================================================
 
 import math

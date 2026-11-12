@@ -1,6 +1,6 @@
 // ============================================================================
 // VERSORC-MATH: ROOT LATTICES & CONWAY-SLOANE VECTOR QUANTIZATION
-// License: Apache-2.0 OR MIT
+// License: Apache-2.0
 // ============================================================================
 
 pub mod e8;

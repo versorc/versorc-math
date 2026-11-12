@@ -1,6 +1,6 @@
 // ============================================================================
 // VERSORC-MATH: AVX2 SPECIALIZED KERNEL FOR CLIFFORD 3-BIT DOT PRODUCTS
-// License: Apache-2.0 OR MIT
+// License: Apache-2.0
 //
 // Eliminates ALU decompression bottlenecks on x86_64 via:
 // 1. vpbroadcastd + vpsrlvd + vpand: Parallel extraction of 8 x 3-bit codes.

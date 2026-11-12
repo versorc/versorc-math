@@ -2,9 +2,9 @@
 name = "versorc-math"
 version = "0.1.0"
 edition = "2021"
-authors = ["ZephSystems"]
+authors = ["The VersorC Project Contributors"]
 description = "Low-level Clifford Geometric Algebra, Versor Operators, and High-Dimensional Matrix Reductions"
-license = "Apache-2.0 OR MIT"
+license = "Apache-2.0"
 readme = "README.md"
 repository = "https://github.com/versorc/versorc-math"
 homepage = "https://github.com/versorc/versorc-math"

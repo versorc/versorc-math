@@ -1,6 +1,6 @@
 // ============================================================================
 // VERSORC-MATH: 3D PROJECTIVE GEOMETRIC ALGEBRA (PGA) - POINT (GRADE 3)
-// License: Apache-2.0 OR MIT
+// License: Apache-2.0
 // ============================================================================
 
 use std::ops::{Add, Div, Mul, Neg, Sub};

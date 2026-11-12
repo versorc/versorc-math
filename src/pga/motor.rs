@@ -1,6 +1,6 @@
 // ============================================================================
 // VERSORC-MATH: 3D PROJECTIVE GEOMETRIC ALGEBRA (PGA) - MOTOR (GRADE 0 + 2 + 4)
-// License: Apache-2.0 OR MIT
+// License: Apache-2.0
 // ============================================================================
 
 use std::ops::{Add, Mul, Neg, Sub};

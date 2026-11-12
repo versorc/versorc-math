@@ -1,6 +1,6 @@
 // ============================================================================
 // VERSORC-MATH: TURBOQUANT GEOMETRIC QUANTIZER (3-BIT LLOYD-MAX + 1-BIT QJL)
-// License: Apache-2.0 OR MIT
+// License: Apache-2.0
 //
 // Implementation of TurboQuant (Amir Zandieh et al. / Google Research)
 // coupled with Clifford Versor Isometry:

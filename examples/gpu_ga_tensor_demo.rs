@@ -1,6 +1,6 @@
 // ============================================================================
 // VERSORC-MATH: VULKAN GPU DOP & GEOMETRIC ALGEBRA TENSOR DEMO
-// License: Apache-2.0 OR MIT
+// License: Apache-2.0
 //
 // CLI command to run:
 // cargo run --example gpu_ga_tensor_demo --features vulkan

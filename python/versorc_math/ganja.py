@@ -1,6 +1,6 @@
 # ============================================================================
 # VERSORC-MATH: INTERACTIVE GANJA.JS GEOMETRIC ALGEBRA VISUALIZATION SUITE
-# License: Apache-2.0 OR MIT
+# License: Apache-2.0
 # ============================================================================
 
 import json

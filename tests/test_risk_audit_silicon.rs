@@ -1,6 +1,6 @@
 // ============================================================================
 // VERSORC-MATH: EMPIRICAL SILICON AUDIT OF 4 KEY RISK VECTORS
-// License: Apache-2.0 OR MIT
+// License: Apache-2.0
 //
 // 1. W_down Invariance: Proves y = W_down * h requires zero layer unrotation
 //    when rotating rows of W_down by R_{d_ff} and h by R_{d_ff}.

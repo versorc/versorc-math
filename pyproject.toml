@@ -7,7 +7,8 @@ name = "versorc-math"
 version = "0.1.0"
 description = "Clifford Geometric Algebra, Versor Operators, and High-Dimensional Quantization"
 readme = "README.md"
-authors = [{ name = "ZephSystems" }]
+authors = [{ name = "The VersorC Project Contributors" }]
+license = { text = "Apache-2.0" }
 requires-python = ">=3.9"
 dependencies = [
     "numpy>=1.20",
@@ -16,6 +17,7 @@ dependencies = [
 classifiers = [
     "Programming Language :: Rust",
     "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: Apache Software License",
     "Topic :: Scientific/Engineering :: Mathematics",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]

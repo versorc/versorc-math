@@ -1,6 +1,6 @@
 // ============================================================================
 // VERSORC-MATH: ORTHOGONAL PLANAR SPINOR BANKS (Cl-RoPE GENERALIZATION)
-// License: Apache-2.0 OR MIT
+// License: Apache-2.0
 // ============================================================================
 
 use super::VersorAction;

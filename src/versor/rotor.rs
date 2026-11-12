@@ -1,6 +1,6 @@
 // ============================================================================
 // VERSORC-MATH: GENERAL EXPONENTIAL PLANAR ROTOR R = exp(-B/2)
-// License: Apache-2.0 OR MIT
+// License: Apache-2.0
 // ============================================================================
 
 use super::VersorAction;

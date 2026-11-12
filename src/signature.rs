@@ -1,6 +1,6 @@
 // ============================================================================
 // VERSORC-MATH: METRIC SIGNATURES FOR CLIFFORD ALGEBRAS Cl(p, q, r)
-// License: Apache-2.0 OR MIT
+// License: Apache-2.0
 // ============================================================================
 
 /// Metric signature defining a Clifford Geometric Algebra Cl(p, q, r).

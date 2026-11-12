@@ -1,6 +1,6 @@
 // ============================================================================
 // VERSORC-MATH: CLIFFORD GEOMETRIC ALGEBRA & VERSOR OPERATORS ENGINE
-// License: Apache-2.0 OR MIT
+// License: Apache-2.0
 // ============================================================================
 
 #![allow(clippy::needless_range_loop)]

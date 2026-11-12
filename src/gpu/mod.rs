@@ -1,6 +1,6 @@
 // ============================================================================
 // VERSORC-MATH: GPU HARDWARE COMPUTE & VULKAN DISPATCH PRIMITIVES
-// License: Apache-2.0 OR MIT
+// License: Apache-2.0
 // ============================================================================
 
 pub mod shaders;

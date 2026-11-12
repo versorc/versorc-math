@@ -1,6 +1,6 @@
 // ============================================================================
 // VERSORC-MATH: 1-VERSORS & HOUSEHOLDER REFLECTION CASCADES
-// License: Apache-2.0 OR MIT
+// License: Apache-2.0
 // ============================================================================
 
 use super::VersorAction;

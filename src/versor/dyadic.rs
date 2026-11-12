@@ -1,6 +1,6 @@
 // ============================================================================
 // VERSORC-MATH: DYADIC VERSORS & FAST WALSH-HADAMARD TRANSFORM (FWHT)
-// License: Apache-2.0 OR MIT
+// License: Apache-2.0
 //
 // Fast Walsh-Hadamard Transform in O(N log N) additions/subtractions with
 // Rademacher sign scramblers S in {-1, +1}^N.

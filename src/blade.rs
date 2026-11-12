@@ -1,6 +1,6 @@
 // ============================================================================
 // VERSORC-MATH: BASIS BLADES & CAYLEY MULTIPLICATION SIGN CALCULATOR
-// License: Apache-2.0 OR MIT
+// License: Apache-2.0
 // ============================================================================
 
 use crate::signature::MetricSignature;

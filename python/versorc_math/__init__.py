@@ -1,6 +1,6 @@
 # ============================================================================
 # VERSORC-MATH: CLIFFORD GEOMETRIC ALGEBRA & VERSOR QUANTIZATION FOR PYTHON
-# License: Apache-2.0 OR MIT
+# License: Apache-2.0
 # ============================================================================
 
 from ._versorc_math import (

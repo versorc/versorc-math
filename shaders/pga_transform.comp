@@ -3,7 +3,7 @@
 // ============================================================================
 // VERSORC VULKAN PGA COMPUTE PRIMITIVE: PGA_TRANSFORM
 // 3D Projective Geometric Algebra / Dual Quaternion Rigid Tensor Transformation
-// License: Apache-2.0 OR MIT
+// License: Apache-2.0
 //
 // Computes p' = M * p * M~ for arbitrary batches/tensors of 3D points
 // completely on GPU VRAM with zero host-roundtrip overhead.

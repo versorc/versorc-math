@@ -1,6 +1,6 @@
 // ============================================================================
 // VERSORC-MATH: CLIFFORD 3-BIT GEOMETRIC QUANTIZER & DOD CACHE-LINE PACKAGING
-// License: Apache-2.0 OR MIT
+// License: Apache-2.0
 //
 // Combines Clifford Dyadic Versor Isometry (R in Spin(N)) with Optimal
 // 3-Bit Lloyd-Max Scalar Centroids for Isotropized Normal Distributions N(0, sigma^2).

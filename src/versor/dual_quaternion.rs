@@ -1,6 +1,6 @@
 // ============================================================================
 // VERSORC-MATH: DUAL QUATERNIONS (H \otimes D) & RIGID SE(3) KINEMATICS
-// License: Apache-2.0 OR MIT
+// License: Apache-2.0
 // ============================================================================
 
 use std::ops::{Add, Mul, Neg, Sub};

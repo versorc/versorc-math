@@ -1,6 +1,6 @@
 // ============================================================================
 // VERSORC-MATH: CAYLEY-KLEIN GEOMETRIC ALGEBRA ENGINE (CK-GA 3D)
-// License: Apache-2.0 OR MIT
+// License: Apache-2.0
 //
 // Unifies Projective Geometric Algebra (PGA, tau = 0), Hyperbolic Clifford
 // Algebra (tau < 0, Cl(3,1,0)), and Spherical/Elliptic Clifford Algebra

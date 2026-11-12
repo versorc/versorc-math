@@ -1,6 +1,6 @@
 // ============================================================================
 // VERSORC-MATH: VULKAN & SPIR-V COMPUTE SHADERS FOR GEOMETRIC OPERATIONS
-// License: Apache-2.0 OR MIT
+// License: Apache-2.0
 //
 // Precompiled SPIR-V 1.3+ bytecode for GPU-accelerated versor, lattice,
 // and dense vector operations. Can be embedded directly by any Vulkan runtime

@@ -1,6 +1,6 @@
 // ============================================================================
 // VERSORC-MATH: DATA-ORIENTED DESIGN (DOD) & 64-BYTE CACHE-LINE BATCH PROCESSING
-// License: Apache-2.0 OR MIT
+// License: Apache-2.0
 //
 // Designed around Universal 64-Bit / 64-Byte Cache-Line Alignment (#[repr(C, align(64))]).
 // Eliminates false sharing, cache-line straddling, and pointer chasing across

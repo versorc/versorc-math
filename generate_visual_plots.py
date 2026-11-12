@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # ============================================================================
 # VERSORC-MATH: SCIENTIFIC HIGH-RESOLUTION PNG VISUALIZATION GENERATOR
-# License: Apache-2.0 OR MIT
+# License: Apache-2.0
 # ============================================================================
 
 import os

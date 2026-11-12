@@ -1,6 +1,6 @@
 // ============================================================================
 // VERSORC-MATH: HAMILTON QUATERNIONS & S^3 GEODESIC SLERP INTERPOLATION
-// License: Apache-2.0 OR MIT
+// License: Apache-2.0
 // ============================================================================
 
 use std::ops::{Add, Mul, Neg, Sub};
