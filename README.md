@@ -20,9 +20,13 @@
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Crates.io](https://img.shields.io/crates/v/versorc-math.svg)](https://crates.io/crates/versorc-math)
+[![Crates.io Downloads](https://img.shields.io/crates/d/versorc-math.svg?color=orange&label=crates.io%20downloads)](https://crates.io/crates/versorc-math)
 [![PyPI](https://img.shields.io/pypi/v/versorc-math.svg)](https://pypi.org/project/versorc-math/)
+[![PyPI Downloads](https://img.shields.io/pepy/dt/versorc-math.svg?color=blue&label=pypi%20downloads)](https://pypi.org/project/versorc-math/)
 [![Documentation](https://docs.rs/versorc-math/badge.svg)](https://docs.rs/versorc-math)
+[![Zenodo](https://img.shields.io/badge/Zenodo-Open_Access-blue.svg)](https://zenodo.org)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/versorc/versorc-math/pulls)
+[![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg)](CODE_OF_CONDUCT.md)
 [![Community](https://img.shields.io/badge/Community-Open_Source-purple.svg)](https://github.com/versorc/versorc-math)
 
 **VERSORC-MATH** is an open-source, community-driven **Clifford Geometric Algebra (GA)**, **Versor Operator**, and **Geometric Quantization** engine written in pure Rust with zero required runtime dependencies. It provides high-performance native **PyO3 / NumPy** bindings, hardware **Vulkan compute shaders**, and scientific visualization suites.
@@ -344,7 +348,11 @@ cargo test --features vulkan --test test_vulkan_compute -- --nocapture
 
 ## Community, Contributing & Forking
 
-`versorc-math` is an open-source initiative built for the global community. We welcome contributions from researchers, mathematicians, engineers, and students alike!
+`versorc-math` is an open-source initiative built by and for the global scientific and engineering community. We welcome contributions from researchers, mathematicians, engineers, educators, and students of all backgrounds!
+
+* **Contributing Guide**: Check out [CONTRIBUTING.md](CONTRIBUTING.md) for full setup instructions, development workflow, and testing guides.
+* **Code of Conduct**: We are committed to fostering a welcoming, harassment-free environment for everyone. Please review our [Code of Conduct](CODE_OF_CONDUCT.md).
+* **Good First Issues**: Whether fixing a typo in theoretical proofs, adding a test case, or optimizing a kernel, all pull requests are valued and reviewed with care.
 
 ### How You Can Contribute:
 - **New Geometric Algebras**: Implement $\mathcal{Cl}(0, 2)$, Conformal 2D, or Compass Geometric Algebra signatures.
@@ -363,7 +371,7 @@ cargo test --features vulkan --test test_vulkan_compute -- --nocapture
    cargo test --all-features
    pytest python/tests/test_ga_numpy.py -v
    ```
-4. **Submit a Pull Request**: Open a PR describing your mathematical rationale and test coverage.
+4. **Submit a Pull Request**: Open a PR describing your mathematical rationale and test coverage. Our maintainers will gladly assist with reviews!
 
 ---
 
