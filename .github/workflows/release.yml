@@ -1,0 +1,70 @@
+name: Release versorc-math
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build & Publish Release Assets
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Install Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Verify Tag Matches Crate Version
+        run: |
+          CRATE_VERSION=$(python3 -c 'import tomllib, pathlib; print(tomllib.loads(pathlib.Path("Cargo.toml").read_text())["package"]["version"])')
+          if [[ "${GITHUB_REF_NAME}" == v* ]] && [[ "${GITHUB_REF_NAME}" != "v${CRATE_VERSION}" ]]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match Cargo.toml version v${CRATE_VERSION}" >&2
+            exit 1
+          fi
+
+      - name: Run Core Verification Tests
+        run: cargo test --locked --no-default-features -- --test-threads=1
+
+      - name: Package Crate Archive
+        run: |
+          cargo package --locked
+          cp target/package/versorc-math-*.crate .
+          sha256sum versorc-math-*.crate > versorc-math.crate.sha256
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            versorc-math-*.crate
+            versorc-math.crate.sha256
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+
+      - name: Publish to Crates.io
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
+        run: |
+          if [ -n "$CARGO_REGISTRY_TOKEN" ]; then
+            if output=$(cargo publish --locked 2>&1); then
+              echo "$output"
+              echo "Successfully published versorc-math to crates.io"
+            else
+              echo "$output"
+              if echo "$output" | grep -iqE "already exists|already uploaded"; then
+                echo "Notice: versorc-math version already exists on crates.io index. Skipping upload."
+              else
+                echo "Error publishing versorc-math" >&2
+                exit 1
+              fi
+            fi
+          else
+            echo "CARGO_REGISTRY_TOKEN is not configured; skipping crates.io publishing."
+          fi
