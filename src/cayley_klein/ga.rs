@@ -175,12 +175,12 @@ impl CkMultivector3D {
     pub fn reverse(&self) -> Self {
         let mut res = *self;
         // Grade 2 blades: e12, e23, e31, e01, e02, e03
-        for i in 5..=10 {
-            res.c[i] = -res.c[i];
+        for c in &mut res.c[5..=10] {
+            *c = -*c;
         }
         // Grade 3 blades: e012, e023, e031, e123
-        for i in 11..=14 {
-            res.c[i] = -res.c[i];
+        for c in &mut res.c[11..=14] {
+            *c = -*c;
         }
         res
     }

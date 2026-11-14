@@ -8,7 +8,6 @@ description = "Low-level Clifford Geometric Algebra, Versor Operators, and High-
 license = "Apache-2.0"
 readme = "README.md"
 repository = "https://github.com/versorc/versorc-math"
-homepage = "https://github.com/versorc/versorc-math"
 documentation = "https://docs.rs/versorc-math"
 keywords = ["geometric-algebra", "clifford", "versor", "quaternion", "math"]
 categories = ["mathematics", "science"]
