@@ -5,9 +5,9 @@ abstract: "A zero-overhead, SIMD-accelerated Clifford Geometric Algebra library 
 authors:
   - name: "The VersorC Project Contributors"
     email: "zeph.systems@proton.me"
-version: 0.1.1
+version: 0.1.2
 doi: "10.5281/zenodo.24153329"
-date-released: 2026-11-12
+date-released: 2026-11-13
 license: "Apache-2.0"
 repository-code: "https://github.com/versorc/versorc-math"
 contact:

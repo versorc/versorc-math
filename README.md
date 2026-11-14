@@ -209,10 +209,10 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-versorc-math = "0.1.1"
+versorc-math = "0.1.2"
 
 # Optional features:
-# versorc-math = { version = "0.1.1", features = ["vulkan", "python"] }
+# versorc-math = { version = "0.1.2", features = ["vulkan", "python"] }
 ```
 
 Basic Rust example:
@@ -323,7 +323,7 @@ If you utilize `versorc-math` in your research, academic publications, or open-s
   title        = {versorc-math: High-Performance Clifford Geometric Algebra and Versor Quantization Engine},
   year         = 2026,
   publisher    = {Zenodo},
-  version      = {0.1.1},
+  version      = {0.1.2},
   doi          = {10.5281/zenodo.24153329},
   url          = {https://github.com/versorc/versorc-math}
 }
