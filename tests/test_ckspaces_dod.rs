@@ -95,8 +95,8 @@ fn test_data_oriented_design_64byte_cache_alignment() {
 
     // 3. Test balanced horizontal reduction on 64-byte accumulator
     let mut acc = Universal64Accumulator::zero();
-    for i in 0..16 {
-        acc.lanes[i] = (i + 1) as f32; // Sum 1..16 = 136
+    for (i, lane) in acc.lanes.iter_mut().enumerate() {
+        *lane = (i + 1) as f32; // Sum 1..16 = 136
     }
     assert_eq!(acc.horizontal_sum(), 136.0f32);
 }
@@ -120,12 +120,8 @@ fn test_soa_batch_cache_line_operations() {
     let dist_accum = batch_a.batch_geodesic_distance(&batch_b, &space_hyp);
     assert_eq!(std::mem::size_of_val(&dist_accum), 64);
 
-    for i in 1..16 {
-        assert!(
-            dist_accum.lanes[i] > 0.0,
-            "Geodesic distance lane {} must be positive",
-            i
-        );
+    for (i, &val) in dist_accum.lanes.iter().enumerate().skip(1) {
+        assert!(val > 0.0, "Geodesic distance lane {} must be positive", i);
     }
 
     // 2. Batch Eisenstein A3 conversion
