@@ -25,8 +25,9 @@ jobs:
         run: echo "PYO3_PYTHON=$(which python3)" >> "$GITHUB_ENV"
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: "1.87.0"
           components: rustfmt, clippy
           targets: x86_64-unknown-linux-gnu
 

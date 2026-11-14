@@ -11,11 +11,6 @@ authors = [{ name = "The VersorC Project Contributors", email = "zeph.systems@pr
 license = { text = "Apache-2.0" }
 requires-python = ">=3.9"
 dependencies = []
-
-[project.optional-dependencies]
-interop = ["numpy>=1.20"]
-test = ["pytest>=7.0", "numpy>=1.20"]
-dev = ["pytest>=7.0", "numpy>=1.20", "maturin>=1.5,<2.0"]
 classifiers = [
     "Programming Language :: Rust",
     "Programming Language :: Python :: 3",
@@ -23,6 +18,17 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Mathematics",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
+
+[project.urls]
+Homepage = "https://github.com/versorc/versorc-math"
+Repository = "https://github.com/versorc/versorc-math"
+Documentation = "https://docs.rs/versorc-math"
+"Bug Tracker" = "https://github.com/versorc/versorc-math/issues"
+
+[project.optional-dependencies]
+interop = ["numpy>=1.20"]
+test = ["pytest>=7.0", "numpy>=1.20"]
+dev = ["pytest>=7.0", "numpy>=1.20", "maturin>=1.5,<2.0"]
 
 [tool.maturin]
 module-name = "versorc_math._versorc_math"
