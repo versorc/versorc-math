@@ -3,8 +3,8 @@
 // License: Apache-2.0
 // ============================================================================
 
-use std::ops::{Add, Mul, Neg, Sub};
 use super::VersorAction;
+use std::ops::{Add, Mul, Neg, Sub};
 
 /// Classical Hamilton Quaternion q = w + x*i + y*j + z*k in H ~= Cl_0,2^+.
 /// Represents an even 2-versor (rotor) on 3D Euclidean space.
@@ -29,7 +29,12 @@ impl Quaternion {
     /// Identity versor 1 + 0i + 0j + 0k.
     #[inline(always)]
     pub const fn identity() -> Self {
-        Self { w: 1.0, x: 0.0, y: 0.0, z: 0.0 }
+        Self {
+            w: 1.0,
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        }
     }
 
     #[inline(always)]

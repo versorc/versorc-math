@@ -6,9 +6,110 @@ on:
   pull_request:
     branches: [ "main", "master" ]
 
+env:
+  CARGO_TERM_COLOR: always
+
 jobs:
+  lint-and-hygiene:
+    name: Format, Clippy, SPIR-V, Feature Matrix & Hygiene
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Export PYO3_PYTHON
+        run: echo "PYO3_PYTHON=$(which python3)" >> "$GITHUB_ENV"
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+          targets: x86_64-unknown-linux-gnu
+
+      - name: Check formatting (rustfmt)
+        run: cargo fmt --all -- --check
+
+      - name: Check repository hygiene (zero emojis, English sources)
+        run: |
+          python3 - <<'PY'
+          import os, re, sys
+          emoji_re = re.compile(r"[\U0001F300-\U0001FAFF\u2600-\u27BF\uFE0F]")
+          spanish_re = re.compile(r"[áéíóúÁÉÍÓÚñÑ¿¡]")
+          emoji_targets = ["src", "tests", "python", "examples", "shaders", ".github", "README.md", "Cargo.toml", "pyproject.toml"]
+          accent_targets = ["src", "tests", "python", "examples", "shaders", "README.md"]
+          errors = []
+
+          def iter_files(roots):
+              for root in roots:
+                  if os.path.isfile(root):
+                      yield root
+                  elif os.path.isdir(root):
+                      for dirpath, dirnames, filenames in os.walk(root):
+                          dirnames[:] = [d for d in dirnames if d not in ("__pycache__", "target", ".git")]
+                          for fn in filenames:
+                              if not fn.endswith((".spv", ".so", ".pyc", ".png", ".jpg")):
+                                  yield os.path.join(dirpath, fn)
+
+          for path in iter_files(emoji_targets):
+              text = open(path, "r", encoding="utf-8").read()
+              for lineno, line in enumerate(text.splitlines(), 1):
+                  m = emoji_re.search(line)
+                  if m:
+                      errors.append(f"Emoji {m.group(0)!r} at {path}:{lineno}")
+
+          for path in iter_files(accent_targets):
+              text = open(path, "r", encoding="utf-8").read()
+              for lineno, line in enumerate(text.splitlines(), 1):
+                  cleaned = (
+                      line.replace("Poincaré", "")
+                          .replace("Möbius", "")
+                          .replace("Plücker", "")
+                          .replace("Dieudonné", "")
+                  )
+                  m = spanish_re.search(cleaned)
+                  if m:
+                      errors.append(f"Non-English accent {m.group(0)!r} at {path}:{lineno}: {line.strip()}")
+
+          if errors:
+              print("\n".join(errors), file=sys.stderr)
+              sys.exit(1)
+          print("Hygiene check passed.")
+          PY
+
+      - name: Install SPIR-V validator
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y spirv-tools
+
+      - name: Validate SPIR-V shader binaries and parity count
+        run: |
+          shopt -s nullglob
+          spvs=(shaders/*.spv)
+          comps=(shaders/*.comp)
+          test "${#spvs[@]}" -eq "${#comps[@]}"
+          test "${#spvs[@]}" -gt 0
+          for comp in "${comps[@]}"; do
+            spv="${comp%.comp}.spv"
+            test -f "$spv"
+            spirv-val --target-env vulkan1.1 "$spv"
+          done
+
+      - name: Run Clippy (all targets, all features, deny warnings)
+        run: cargo clippy --locked --all-targets --all-features -- -D warnings
+
+      - name: Verify feature matrix compilation
+        run: |
+          cargo check --locked --no-default-features
+          cargo check --locked --features vulkan
+          cargo check --locked --features python
+          cargo check --locked --all-features --examples
+
   test-rust:
-    name: Rust Suite (x86_64 Linux)
+    name: Rust Core Integration Suite
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -18,34 +119,43 @@ jobs:
         with:
           targets: x86_64-unknown-linux-gnu
 
-      - name: Rustfmt Check
-        run: cargo fmt --all -- --check
+      - name: Run CPU & SIMD unit and integration tests
+        run: cargo test --locked --no-default-features --verbose
 
-      - name: Cargo Check (all features)
-        run: cargo check --all-targets --all-features
-
-      - name: Run Core Integration Tests
-        run: cargo test --verbose
+      - name: Compile Vulkan compute integration tests
+        run: cargo test --locked --features vulkan --no-run
 
   test-python:
-    name: PyO3 & NumPy Suite
+    name: Python PEP 3118 Suite (Zero-Dep & Optional NumPy Interop)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python 3.11
+      - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
 
-      - name: Install Python dependencies
-        run: pip install --upgrade pip numpy pytest maturin
+      - name: Export PYO3_PYTHON
+        run: echo "PYO3_PYTHON=$(which python3)" >> "$GITHUB_ENV"
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-gnu
 
-      - name: Build Python Extension with Maturin
-        run: maturin develop --release --features python
+      - name: Build native PyO3 extension module (zero third-party build deps)
+        run: |
+          cargo build --locked --release --features python
+          EXT_SUFFIX="$(python3 -c 'import sysconfig; print(sysconfig.get_config_var("EXT_SUFFIX"))')"
+          cp target/release/libversorc_math.so "python/versorc_math/_versorc_math${EXT_SUFFIX}"
 
-      - name: Run Pytest Suite
-        run: pytest python/tests/test_ga_numpy.py -v
+      - name: Run Python test suite with stdlib only (no NumPy / Pytest)
+        run: |
+          PYTHONPATH=python python3 -m unittest discover -s python/tests -p "test_*.py" -v
+          PYTHONPATH=python python3 examples/ganja_demo.py > /dev/null
+
+      - name: Install optional NumPy and verify zero-copy buffer interop
+        run: |
+          pip install --no-cache-dir numpy
+          PYTHONPATH=python python3 -m unittest discover -s python/tests -p "test_*.py" -v

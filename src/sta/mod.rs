@@ -27,13 +27,19 @@ impl Default for StaVector {
 
 impl StaVector {
     #[inline(always)]
+    #[allow(clippy::too_many_arguments)]
     pub const fn new(ct: f32, x: f32, y: f32, z: f32) -> Self {
         Self { ct, x, y, z }
     }
 
     #[inline(always)]
     pub const fn zero() -> Self {
-        Self { ct: 0.0, x: 0.0, y: 0.0, z: 0.0 }
+        Self {
+            ct: 0.0,
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        }
     }
 
     /// Spacetime interval invariant s^2 = (ct)^2 - (x^2 + y^2 + z^2).
@@ -169,6 +175,7 @@ impl Default for StaBivector {
 
 impl StaBivector {
     #[inline(always)]
+    #[allow(clippy::too_many_arguments)]
     pub const fn new(ex: f32, ey: f32, ez: f32, bx: f32, by: f32, bz: f32) -> Self {
         Self {
             ex,
@@ -310,11 +317,11 @@ pub enum LounestoClass {
 /// sigma (scalar R1), omega (pseudoscalar R2), J (current), S (spin density bivector), K (chiral current).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SpinorBilinearCovariants {
-    pub sigma: f32,       // Scalar invariant <psi psi~>_0
-    pub omega: f32,       // Pseudoscalar invariant <psi psi~>_4
-    pub j: StaVector,     // Dirac probability current 4-vector
-    pub s: StaBivector,   // Spin density bivector
-    pub k: StaVector,     // Chiral / pseudovector current
+    pub sigma: f32,     // Scalar invariant <psi psi~>_0
+    pub omega: f32,     // Pseudoscalar invariant <psi psi~>_4
+    pub j: StaVector,   // Dirac probability current 4-vector
+    pub s: StaBivector, // Spin density bivector
+    pub k: StaVector,   // Chiral / pseudovector current
 }
 
 /// Dirac Spinor in Spacetime Algebra Cl(1, 3) as an Even Multivector Cl+(1, 3):
@@ -357,6 +364,7 @@ impl StaSpinor {
     }
 
     #[inline(always)]
+    #[allow(clippy::too_many_arguments)]
     pub const fn new(
         scalar: f32,
         ex: f32,
@@ -419,20 +427,20 @@ impl StaSpinor {
         let jz = 2.0 * (s * ez + p * bz + ex * by - ey * bx);
         let j = StaVector::new(j0, jx, jy, jz);
 
-        // Spin density bivector S = <psi \gamma_{12} \psi~>_2
-        let sex = 2.0 * (s * bx - p * ex + ey * ez);
-        let sey = 2.0 * (s * by - p * ey + ez * ex);
-        let sez = 2.0 * (s * bz - p * ez + ex * ey);
-        let sbx = s * s - p * p + ex * ex - ey * ey - ez * ez - bx * bx + by * by + bz * bz;
-        let sby = 2.0 * (ex * ey - bx * by);
-        let sbz = 2.0 * (ex * ez - bx * bz);
+        // Spin density bivector S = psi (\gamma_2 \gamma_1) \psi~
+        let sex = 2.0 * (-s * ey + p * by + bz * ex + ez * bx);
+        let sey = 2.0 * (s * ex - p * bx + bz * ey + ez * by);
+        let sez = -2.0 * (s * p + ex * bx + ey * by - ez * bz);
+        let sbx = 2.0 * (-s * by - p * ey + bz * bx - ez * ex);
+        let sby = 2.0 * (s * bx + p * ex + bz * by - ez * ey);
+        let sbz = (s * s - p * p) + (ex * ex + ey * ey - ez * ez) - (bx * bx + by * by - bz * bz);
         let s_biv = StaBivector::new(sex, sey, sez, sbx, sby, sbz);
 
-        // Chiral current / pseudovector K^mu
-        let k0 = 2.0 * (s * p + ex * bx + ey * by + ez * bz);
-        let kx = 2.0 * (p * ex - s * bx + ey * bz - ez * by);
-        let ky = 2.0 * (p * ey - s * by + ez * bx - ex * bz);
-        let kz = 2.0 * (p * ez - s * bz + ex * by - ey * bx);
+        // Chiral spin 4-vector K = psi \gamma_3 \psi~
+        let k0 = 2.0 * (s * ez + p * bz - ex * by + ey * bx);
+        let kx = 2.0 * (-s * by + p * ey + ex * ez + bz * bx);
+        let ky = 2.0 * (s * bx - p * ex + ey * ez + bz * by);
+        let kz = (s * s + p * p) - (ex * ex + ey * ey - ez * ez) - (bx * bx + by * by - bz * bz);
         let k = StaVector::new(k0, kx, ky, kz);
 
         SpinorBilinearCovariants {
@@ -458,11 +466,19 @@ impl StaSpinor {
         } else if !sig_nonzero && ome_nonzero {
             LounestoClass::Class3DiracPseudoscalar
         } else {
-            // Singular spinors (sigma == 0 and omega == 0)
-            let s_norm_sq = cov.s.invariant_1().abs() + cov.s.invariant_2().abs();
-            let k_norm_sq = cov.k.interval_sq().abs();
-            let s_nonzero = s_norm_sq > tol * tol;
-            let k_nonzero = k_norm_sq > tol * tol;
+            // Singular spinors (sigma == 0 and omega == 0):
+            // Both K^2 and S^2 vanish identically by Fierz identities, so we must
+            // test Euclidean coefficient norms rather than Minkowski invariants.
+            let s_mag_sq = cov.s.ex * cov.s.ex
+                + cov.s.ey * cov.s.ey
+                + cov.s.ez * cov.s.ez
+                + cov.s.bx * cov.s.bx
+                + cov.s.by * cov.s.by
+                + cov.s.bz * cov.s.bz;
+            let k_mag_sq =
+                cov.k.ct * cov.k.ct + cov.k.x * cov.k.x + cov.k.y * cov.k.y + cov.k.z * cov.k.z;
+            let s_nonzero = s_mag_sq > tol * tol;
+            let k_nonzero = k_mag_sq > tol * tol;
 
             if s_nonzero && k_nonzero {
                 LounestoClass::Class4FlagDipole

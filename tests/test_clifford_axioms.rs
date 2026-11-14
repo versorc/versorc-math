@@ -50,7 +50,11 @@ fn test_clifford_associativity_axiom() {
     let rhs = a * (b * c);
 
     let diff = (lhs - rhs).norm();
-    assert!(diff < 1e-5, "Geometric product must be associative, diff = {}", diff);
+    assert!(
+        diff < 1e-5,
+        "Geometric product must be associative, diff = {}",
+        diff
+    );
 }
 
 #[test]
@@ -63,7 +67,11 @@ fn test_reversion_anti_automorphism() {
     let rhs = b.reverse() * a.reverse();
 
     let diff = (lhs - rhs).norm();
-    assert!(diff < 1e-6, "Reversion must satisfy (A*B)~ = B~*A~, diff = {}", diff);
+    assert!(
+        diff < 1e-6,
+        "Reversion must satisfy (A*B)~ = B~*A~, diff = {}",
+        diff
+    );
 }
 
 #[test]
@@ -121,7 +129,10 @@ fn test_lie_commutator_and_jacobi_identity() {
     // Commutator of bivectors closes on bivectors (so(3) Lie algebra)
     // [e12, e23] = 1/2 (e12 e23 - e23 e12) = 1/2 (e13 - (-e13)) = e13
     let comm = b12.commutator(&b23);
-    assert!((comm - b13).norm() < 1e-6, "Commutator of e12 and e23 must be e13");
+    assert!(
+        (comm - b13).norm() < 1e-6,
+        "Commutator of e12 and e23 must be e13"
+    );
 
     // Anticommutativity: [A, B] = -[B, A]
     let comm_rev = b23.commutator(&b12);
@@ -136,7 +147,11 @@ fn test_lie_commutator_and_jacobi_identity() {
     let term2 = b.commutator(&c.commutator(&a));
     let term3 = c.commutator(&a.commutator(&b));
     let jacobi_sum = term1 + term2 + term3;
-    assert!(jacobi_sum.norm() < 1e-5, "Jacobi sum must be zero, got {}", jacobi_sum.norm());
+    assert!(
+        jacobi_sum.norm() < 1e-5,
+        "Jacobi sum must be zero, got {}",
+        jacobi_sum.norm()
+    );
 
     // Jordan anticommutator A ⊙ B = 1/2 (AB + BA)
     let anticomm = a.anticommutator(&b);
@@ -156,10 +171,15 @@ fn test_regressive_meet_product() {
     let p_yz = e2.wedge(&e3);
 
     // Their intersection line (meet) should be along e2 (y-axis)
-    let meet = p_xy.regressive_product(&p_yz).expect("Regressive product must exist");
+    let meet = p_xy
+        .regressive_product(&p_yz)
+        .expect("Regressive product must exist");
     // Meet is parallel to e2
     let e2_component = meet.scalar_product(&e2);
-    assert!(e2_component.abs() > 0.99, "Intersection line must lie along e2");
+    assert!(
+        e2_component.abs() > 0.99,
+        "Intersection line must lie along e2"
+    );
     // No other grade or component
     assert!((meet.grade_projection(1) - meet).norm() < 1e-6);
 }
@@ -172,7 +192,10 @@ fn test_cl2_and_cl3_general_multivector_inverse() {
     };
     let inv_cl2 = a_cl2.inverse().expect("a_cl2 must be invertible");
     let prod_cl2 = a_cl2 * inv_cl2;
-    assert!((prod_cl2 - Cl2::from_scalar(1.0)).norm() < 1e-5, "A * A^-1 must be 1 in Cl(2)");
+    assert!(
+        (prod_cl2 - Cl2::from_scalar(1.0)).norm() < 1e-5,
+        "A * A^-1 must be 1 in Cl(2)"
+    );
 
     // 2. Test Cl(3) general multivector inverse with all 8 blades populated
     let a_cl3 = Cl3 {
@@ -182,6 +205,59 @@ fn test_cl2_and_cl3_general_multivector_inverse() {
     let prod_cl3_right = a_cl3 * inv_cl3;
     let prod_cl3_left = inv_cl3 * a_cl3;
 
-    assert!((prod_cl3_right - Cl3::from_scalar(1.0)).norm() < 1e-5, "A * A^-1 must be 1 in Cl(3)");
-    assert!((prod_cl3_left - Cl3::from_scalar(1.0)).norm() < 1e-5, "A^-1 * A must be 1 in Cl(3)");
+    assert!(
+        (prod_cl3_right - Cl3::from_scalar(1.0)).norm() < 1e-5,
+        "A * A^-1 must be 1 in Cl(3)"
+    );
+    assert!(
+        (prod_cl3_left - Cl3::from_scalar(1.0)).norm() < 1e-5,
+        "A^-1 * A must be 1 in Cl(3)"
+    );
+}
+
+#[test]
+fn test_hestenes_inner_product_on_null_blades_and_inverse_null_residual() {
+    type Cl41 = versorc_math::multivector::Multivector<4, 1, 0, 32>;
+    type Cl301 = versorc_math::multivector::Multivector<3, 0, 1, 16>;
+
+    // Null basis vectors in Cl(4, 1, 0): e4^2 = +1, e5^2 = -1
+    let e_plus = Cl41::basis(4);
+    let e_minus = Cl41::basis(5);
+    let n_o = (e_minus - e_plus) * 0.5;
+    let n_inf = e_minus + e_plus;
+
+    // Both n_o and n_inf have norm_sq == 0, yet their Hestenes inner product is -1.0
+    assert_eq!(n_o.norm_sq(), 0.0);
+    assert_eq!(n_inf.norm_sq(), 0.0);
+    let dot = n_o.hestenes_inner_product(&n_inf);
+    assert!(
+        (dot.scalar() - (-1.0)).abs() < 1e-6,
+        "Expected n_o . n_inf == -1, got {}",
+        dot.scalar()
+    );
+    assert!((dot - Cl41::from_scalar(-1.0)).euclidean_norm() < 1e-6);
+
+    // 1 + n_o has (1 + n_o)(1 + n_o) = 1 + 2 n_o; algebraic norm of residual 2 n_o is 0,
+    // so general versor fallback must reject it via Euclidean residual check.
+    let one_plus_no = Cl41::from_scalar(1.0) + n_o;
+    assert!(
+        one_plus_no.inverse().is_none(),
+        "Versor fallback must reject 1 + n_o"
+    );
+
+    // Similarly in degenerate Cl(3, 0, 1): 1 + e4 (e4^2 = 0) cannot be inverted via reverse / norm_sq
+    let one_plus_e0 = Cl301::from_scalar(1.0) + Cl301::basis(4);
+    assert!(
+        one_plus_e0.inverse().is_none(),
+        "Versor fallback must reject 1 + e0"
+    );
+
+    // Negative-signature basis vector e2 in Cl(1, 3, 0) has norm_sq = -1 and must still invert cleanly
+    let timelike_or_spacelike = ClMinkowski::basis(2);
+    let inv_e2 = timelike_or_spacelike
+        .inverse()
+        .expect("e2 in Minkowski space must invert");
+    assert!(
+        ((timelike_or_spacelike * inv_e2) - ClMinkowski::from_scalar(1.0)).euclidean_norm() < 1e-6
+    );
 }

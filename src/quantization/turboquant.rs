@@ -22,9 +22,10 @@ use crate::versor::DyadicWalshVersor;
 /// - 32 x 1-bit QJL residual signs: 32 bits (4 bytes)
 /// - 1 BF16 base scale: 16 bits (2 bytes)
 /// - 1 BF16 residual scale: 16 bits (2 bytes)
+///
 /// Total: 20 bytes (160 bits) for 32 weights.
 #[repr(C)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct TurboQuantBlock32 {
     /// 3-bit base codes packed into 12 bytes (96 bits)
     pub base_codes: [u8; 12],
@@ -34,17 +35,6 @@ pub struct TurboQuantBlock32 {
     pub base_scale: u16,
     /// Residual scale (sqrt(2/pi) * std(r)) in BF16
     pub residual_scale: u16,
-}
-
-impl Default for TurboQuantBlock32 {
-    fn default() -> Self {
-        Self {
-            base_codes: [0u8; 12],
-            residual_signs: 0,
-            base_scale: 0,
-            residual_scale: 0,
-        }
-    }
 }
 
 impl TurboQuantBlock32 {
@@ -126,8 +116,16 @@ impl TurboQuantBlock32 {
         let g12: f32 = u_norm.iter().zip(v_sign.iter()).map(|(&u, &v)| u * v).sum();
         let g22: f32 = 32.0f32; // ||v_sign||^2 = sum_1^32 (+-1)^2 = 32
 
-        let rhs1: f32 = weights.iter().zip(u_norm.iter()).map(|(&w, &u)| w * u).sum();
-        let rhs2: f32 = weights.iter().zip(v_sign.iter()).map(|(&w, &v)| w * v).sum();
+        let rhs1: f32 = weights
+            .iter()
+            .zip(u_norm.iter())
+            .map(|(&w, &u)| w * u)
+            .sum();
+        let rhs2: f32 = weights
+            .iter()
+            .zip(v_sign.iter())
+            .map(|(&w, &v)| w * v)
+            .sum();
 
         let det = g11 * g22 - g12 * g12;
         let (alpha1, alpha2) = if det.abs() > 1e-12 {
@@ -208,19 +206,10 @@ impl TurboQuantBlock32 {
 /// 64-byte Cache-Line Aligned TurboQuant Block holding 64 weights.
 /// Uses 2 x TurboQuantBlock32 (40 bytes total), padded and aligned to 64 bytes.
 #[repr(C, align(64))]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct TurboQuantCacheLine64 {
     pub blocks: [TurboQuantBlock32; 2],
     pub _padding: [u8; 24], // 40 + 24 = 64 bytes
-}
-
-impl Default for TurboQuantCacheLine64 {
-    fn default() -> Self {
-        Self {
-            blocks: [TurboQuantBlock32::default(); 2],
-            _padding: [0u8; 24],
-        }
-    }
 }
 
 impl TurboQuantCacheLine64 {
@@ -255,9 +244,18 @@ pub struct TurboQuantTensor {
 
 impl TurboQuantTensor {
     /// Compiles an unquantized FP32 weight matrix into the AOT rotated TurboQuant representation.
-    pub fn compile_aot(weights: &[f32], rows: usize, cols: usize, versor: &DyadicWalshVersor) -> Self {
+    pub fn compile_aot(
+        weights: &[f32],
+        rows: usize,
+        cols: usize,
+        versor: &DyadicWalshVersor,
+    ) -> Self {
         assert_eq!(weights.len(), rows * cols);
-        assert_eq!(cols % 64, 0, "Columns must be a multiple of 64 for cache-line alignment");
+        assert_eq!(
+            cols % 64,
+            0,
+            "Columns must be a multiple of 64 for cache-line alignment"
+        );
         assert_eq!(versor.dimension(), cols);
 
         let lines_per_row = cols / 64;
@@ -295,7 +293,7 @@ impl TurboQuantTensor {
 
         // 2. Direct streaming dot products
         let lines_per_row = self.cols / 64;
-        for r in 0..self.rows {
+        for (r, out_val) in out.iter_mut().enumerate() {
             let mut row_dot = 0.0f32;
             let line_offset = r * lines_per_row;
             for l in 0..lines_per_row {
@@ -303,7 +301,7 @@ impl TurboQuantTensor {
                 let chunk_x: &[f32; 64] = x_rot[l * 64..(l + 1) * 64].try_into().unwrap();
                 row_dot += cache_line.dot_64(chunk_x);
             }
-            out[r] = row_dot;
+            *out_val = row_dot;
         }
     }
 }

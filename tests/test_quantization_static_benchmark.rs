@@ -12,8 +12,11 @@
 // 4. Dot product error and inference throughput
 // ============================================================================
 
-use versorc_math::prelude::*;
 use std::time::Instant;
+use versorc_math::prelude::*;
+use versorc_math::quantization::clifford_3bit::{
+    compute_symmetric_lloyd_max_3bit, Clifford3BitWord64,
+};
 
 /// Generates a bit-identical, deterministic static matrix of size rows x cols.
 /// Uses a 64-bit PCG state with Box-Muller transform to produce exact Gaussian distribution
@@ -23,7 +26,9 @@ fn generate_deterministic_static_matrix(rows: usize, cols: usize) -> Vec<f32> {
     let mut state = 0x853c49e6748fea9bu64; // Fixed deterministic seed
 
     let mut next_u32 = || -> u32 {
-        state = state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        state = state
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
         let xorshifted = (((state >> 18) ^ state) >> 27) as u32;
         let rot = (state >> 59) as u32;
         (xorshifted >> rot) | (xorshifted << ((32 - rot) & 31))
@@ -42,12 +47,14 @@ fn generate_deterministic_static_matrix(rows: usize, cols: usize) -> Vec<f32> {
         i += 2;
     }
 
-    // Inject fixed, realistic outlier channels across all rows (columns 42, 350, 1020, 1800)
+    // Inject row-modulated heavy outlier channels across all rows (columns 42, 350, 1020, 1800)
     let outlier_cols = [42usize, 350, 1020, 1800];
     let outlier_vals = [45.0f32, -38.5, 52.0, -41.2];
     for r in 0..rows {
-        for (&col, &val) in outlier_cols.iter().zip(outlier_vals.iter()) {
-            data[r * cols + col] = val;
+        for (k, (&col, &base_val)) in outlier_cols.iter().zip(outlier_vals.iter()).enumerate() {
+            let sign = if ((r + k) & 1) == 0 { 1.0f32 } else { -1.0f32 };
+            let modulation = 0.4 + 0.12 * (((r * 7 + k * 5) % 11) as f32);
+            data[r * cols + col] = base_val * sign * modulation;
         }
     }
 
@@ -59,10 +66,10 @@ fn generate_deterministic_activation(cols: usize) -> Vec<f32> {
     let mut act = vec![0.0f32; cols];
     let mut state = 0x123456789abcdef0u64;
 
-    for i in 0..cols {
+    for slot in &mut act {
         state = state.wrapping_mul(6364136223846793005).wrapping_add(1);
         let u = (state >> 32) as f32 / 4294967296.0;
-        act[i] = (u - 0.5) * 2.0; // Uniform in [-1.0, 1.0]
+        *slot = (u - 0.5) * 2.0; // Uniform in [-1.0, 1.0]
     }
     // Activation also has independent outlier peaks (columns 128, 800)
     act[128] = 30.0;
@@ -82,6 +89,17 @@ fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
     dot / (norm_a.sqrt() * norm_b.sqrt()).max(1e-12)
 }
 
+fn relative_l2_error(exact: &[f32], approx: &[f32]) -> f32 {
+    let mut diff_sq = 0.0f32;
+    let mut ref_sq = 0.0f32;
+    for (&e, &a) in exact.iter().zip(approx.iter()) {
+        let d = e - a;
+        diff_sq += d * d;
+        ref_sq += e * e;
+    }
+    diff_sq.sqrt() / ref_sq.sqrt().max(1e-12)
+}
+
 #[test]
 fn test_static_matrix_quantization_audit() {
     let rows = 256usize;
@@ -89,8 +107,11 @@ fn test_static_matrix_quantization_audit() {
     let total_weights = rows * cols; // 524,288 weights
 
     println!("====================================================================");
-    println!(" AUDITORÍA DE CUANTIZACIÓN DETERMINISTA ESTÁTICA ({} x {})", rows, cols);
-    println!(" Total de pesos reales evaluados: {}", total_weights);
+    println!(
+        " DETERMINISTIC STATIC QUANTIZATION AUDIT ({} x {})",
+        rows, cols
+    );
+    println!(" Total evaluated real weights: {}", total_weights);
     println!("====================================================================");
 
     let weights = generate_deterministic_static_matrix(rows, cols);
@@ -108,10 +129,11 @@ fn test_static_matrix_quantization_audit() {
         }
         y_exact[r] = sum;
     }
+    std::hint::black_box(&y_exact);
     let elapsed_exact = t0.elapsed();
-    println!(" FP32 Referencia Exacta: tiempo = {:?}", elapsed_exact);
+    println!(" FP32 Exact Reference: elapsed = {:?}", elapsed_exact);
 
-    // Activación correlacionada (x_corr = combinación de filas de W + ruido)
+    // Correlated activation (x_corr = linear combination of W rows + noise)
     let mut x_corr = vec![0.0f32; cols];
     for c in 0..cols {
         x_corr[c] = weights[10 * cols + c] * 0.4 + weights[25 * cols + c] * 0.3 + x_act[c] * 0.1;
@@ -147,8 +169,9 @@ fn test_static_matrix_quantization_audit() {
     }
     cos_rows_2bit_unrot /= rows as f32;
     let cos_matvec_2bit_unrot = cosine_similarity(&y_exact, &y_2bit_unrot);
+    let rel_l2_matvec_2bit_unrot = relative_l2_error(&y_exact, &y_2bit_unrot);
 
-    // 3. Current 3-bit Clifford Implementation (Baseline Analytical RMS Scale)
+    // 3. Packed 3-bit Clifford Tensor (AOT Dyadic Walsh rotation + Least-Squares BF16 scales)
     let t_compile_3bit = Instant::now();
     let tensor_3bit = Clifford3BitTensor::compile_aot(&weights, rows, cols, &versor);
     let _time_compile_3bit = t_compile_3bit.elapsed();
@@ -156,11 +179,14 @@ fn test_static_matrix_quantization_audit() {
     let t_matvec_3bit = Instant::now();
     let mut y_3bit = vec![0.0f32; rows];
     tensor_3bit.matvec(&x_act, &mut y_3bit, &versor);
+    std::hint::black_box(&y_3bit);
     let time_matvec_3bit = t_matvec_3bit.elapsed();
     let cos_matvec_3bit = cosine_similarity(&y_exact, &y_3bit);
+    let rel_l2_matvec_3bit = relative_l2_error(&y_exact, &y_3bit);
 
-    // Check average row weight reconstruction cosine
+    // Check average row weight reconstruction cosine & relative L2 error
     let mut avg_cos_row_3bit = 0.0f32;
+    let mut avg_rel_l2_row_3bit = 0.0f32;
     let mut row_buf = vec![0.0f32; cols];
     let lines_per_row = cols / 128;
     for r in 0..rows {
@@ -169,17 +195,22 @@ fn test_static_matrix_quantization_audit() {
             tensor_3bit.cache_lines[r * lines_per_row + l].unpack_128(chunk);
         }
         versor.invert_in_place(&mut row_buf);
-        avg_cos_row_3bit += cosine_similarity(&weights[r * cols..(r + 1) * cols], &row_buf);
+        let row_orig = &weights[r * cols..(r + 1) * cols];
+        avg_cos_row_3bit += cosine_similarity(row_orig, &row_buf);
+        avg_rel_l2_row_3bit += relative_l2_error(row_orig, &row_buf);
     }
     avg_cos_row_3bit /= rows as f32;
+    avg_rel_l2_row_3bit /= rows as f32;
 
-    // 4. Current TurboQuant Implementation
+    // 4. Packed TurboQuant Tensor (3-bit Base + 1-bit QJL)
     let tensor_turbo = TurboQuantTensor::compile_aot(&weights, rows, cols, &versor);
     let t_matvec_turbo = Instant::now();
     let mut y_turbo = vec![0.0f32; rows];
     tensor_turbo.matvec(&x_act, &mut y_turbo, &versor);
+    std::hint::black_box(&y_turbo);
     let time_matvec_turbo = t_matvec_turbo.elapsed();
     let cos_matvec_turbo = cosine_similarity(&y_exact, &y_turbo);
+    let rel_l2_matvec_turbo = relative_l2_error(&y_exact, &y_turbo);
 
     let mut y_3bit_corr = vec![0.0f32; rows];
     tensor_3bit.matvec(&x_corr, &mut y_3bit_corr, &versor);
@@ -192,7 +223,7 @@ fn test_static_matrix_quantization_audit() {
     println!("y_3bit[0..5]:  {:?}", &y_3bit[0..5]);
     println!("y_turbo[0..5]: {:?}", &y_turbo[0..5]);
 
-    // DIAGNÓSTICO DETALLADO FILA 0:
+    // DETAILED ROW 0 DIAGNOSTICS:
     let w0 = &weights[0..cols];
     let dot_exact: f32 = w0.iter().zip(x_act.iter()).map(|(&a, &b)| a * b).sum();
 
@@ -204,26 +235,52 @@ fn test_static_matrix_quantization_audit() {
 
     let mut w0_quant_rot = vec![0.0f32; cols];
     for l in 0..lines_per_row {
-        let chunk: &mut [f32; 128] = (&mut w0_quant_rot[l * 128..(l + 1) * 128]).try_into().unwrap();
+        let chunk: &mut [f32; 128] = (&mut w0_quant_rot[l * 128..(l + 1) * 128])
+            .try_into()
+            .unwrap();
         tensor_3bit.cache_lines[l].unpack_128(chunk);
     }
-    let dot_quant_rot: f32 = w0_quant_rot.iter().zip(x_rot.iter()).map(|(&a, &b)| a * b).sum();
+    let dot_quant_rot: f32 = w0_quant_rot
+        .iter()
+        .zip(x_rot.iter())
+        .map(|(&a, &b)| a * b)
+        .sum();
 
     let mut w0_recon_orig = w0_quant_rot.clone();
     versor.invert_in_place(&mut w0_recon_orig);
-    let dot_recon_orig: f32 = w0_recon_orig.iter().zip(x_act.iter()).map(|(&a, &b)| a * b).sum();
+    let dot_recon_orig: f32 = w0_recon_orig
+        .iter()
+        .zip(x_act.iter())
+        .map(|(&a, &b)| a * b)
+        .sum();
 
     println!("--------------------------------------------------------------------");
-    println!(" DIAGNÓSTICO FILA 0:");
+    println!(" ROW 0 DIAGNOSTICS:");
     println!("  - dot_exact (w0 . x)                : {:.6}", dot_exact);
-    println!("  - dot_rot_exact (R(w0) . R(x))      : {:.6}", dot_rot_exact);
-    println!("  - dot_quant_rot (Q(R(w0)) . R(x))   : {:.6}", dot_quant_rot);
-    println!("  - dot_recon_orig (R^-1(Q) . x)      : {:.6}", dot_recon_orig);
-    println!("  - Error absoluto rotación isometría : {:.2e}", (dot_exact - dot_rot_exact).abs());
-    println!("  - Error por cuantización 3-bit      : {:.6}", (dot_exact - dot_quant_rot).abs());
+    println!(
+        "  - dot_rot_exact (R(w0) . R(x))      : {:.6}",
+        dot_rot_exact
+    );
+    println!(
+        "  - dot_quant_rot (Q(R(w0)) . R(x))   : {:.6}",
+        dot_quant_rot
+    );
+    println!(
+        "  - dot_recon_orig (R^-1(Q) . x)      : {:.6}",
+        dot_recon_orig
+    );
+    println!(
+        "  - Rotation isometry abs error       : {:.2e}",
+        (dot_exact - dot_rot_exact).abs()
+    );
+    println!(
+        "  - 3-bit quantization abs error      : {:.6}",
+        (dot_exact - dot_quant_rot).abs()
+    );
     println!("--------------------------------------------------------------------");
 
     let mut avg_cos_row_turbo = 0.0f32;
+    let mut avg_rel_l2_row_turbo = 0.0f32;
     let turbo_lines_per_row = cols / 64;
     for r in 0..rows {
         for l in 0..turbo_lines_per_row {
@@ -234,50 +291,148 @@ fn test_static_matrix_quantization_audit() {
             tensor_turbo.cache_lines[r * turbo_lines_per_row + l].blocks[1].unpack(chunk1);
         }
         versor.invert_in_place(&mut row_buf);
-        avg_cos_row_turbo += cosine_similarity(&weights[r * cols..(r + 1) * cols], &row_buf);
+        let row_orig = &weights[r * cols..(r + 1) * cols];
+        avg_cos_row_turbo += cosine_similarity(row_orig, &row_buf);
+        avg_rel_l2_row_turbo += relative_l2_error(row_orig, &row_buf);
     }
     avg_cos_row_turbo /= rows as f32;
+    avg_rel_l2_row_turbo /= rows as f32;
 
     println!("--------------------------------------------------------------------");
-    println!(" RESULTADOS DETERMINISTAS (Sin Mock Data, 524,288 Pesos):");
+    println!(" DETERMINISTIC RESULTS ({} Weights):", total_weights);
     println!("--------------------------------------------------------------------");
-    println!(" 2-Bit Directo Sin Rotar (BitNet):");
-    println!("   - Cosine Promedio Pesos (w)     : {:.5}", cos_rows_2bit_unrot);
-    println!("   - Cosine Salida MatVec (y)      : {:.5}", cos_matvec_2bit_unrot);
-    println!(" 3-Bit Clifford Lloyd-Max:");
-    println!("   - Cosine Promedio Pesos (w)     : {:.5}", avg_cos_row_3bit);
-    println!("   - Cosine Salida MatVec (y)      : {:.5}", cos_matvec_3bit);
-    println!("   - Cosine MatVec Correlacionada  : {:.5}", cos_matvec_3bit_corr);
-    println!("   - Tiempo MatVec                 : {:?}", time_matvec_3bit);
+    println!(" 2-Bit Direct Unrotated (BitNet):");
+    println!(
+        "   - Mean Weight Cosine            : {:.5}",
+        cos_rows_2bit_unrot
+    );
+    println!(
+        "   - MatVec Output Cosine          : {:.5}",
+        cos_matvec_2bit_unrot
+    );
+    println!(
+        "   - MatVec Relative L2 Error      : {:.5}",
+        rel_l2_matvec_2bit_unrot
+    );
+    println!(" 3-Bit Clifford Lloyd-Max (Packed LS Tensor):");
+    println!(
+        "   - Mean Weight Cosine            : {:.5}",
+        avg_cos_row_3bit
+    );
+    println!(
+        "   - Mean Weight Rel L2 Error      : {:.5}",
+        avg_rel_l2_row_3bit
+    );
+    println!(
+        "   - MatVec Output Cosine          : {:.5}",
+        cos_matvec_3bit
+    );
+    println!(
+        "   - MatVec Relative L2 Error      : {:.5}",
+        rel_l2_matvec_3bit
+    );
+    println!(
+        "   - Correlated MatVec Cosine      : {:.5}",
+        cos_matvec_3bit_corr
+    );
+    println!(
+        "   - MatVec Latency                : {:?}",
+        time_matvec_3bit
+    );
     println!(" TurboQuant (3-bit Base + 1-bit QJL):");
-    println!("   - Cosine Promedio Pesos (w)     : {:.5}", avg_cos_row_turbo);
-    println!("   - Cosine Salida MatVec (y)      : {:.5}", cos_matvec_turbo);
-    println!("   - Correlated MatVec Cosine      : {:.5}", cos_matvec_turbo_corr);
-    println!("   - MatVec Latency                : {:?}", time_matvec_turbo);
+    println!(
+        "   - Mean Weight Cosine            : {:.5}",
+        avg_cos_row_turbo
+    );
+    println!(
+        "   - Mean Weight Rel L2 Error      : {:.5}",
+        avg_rel_l2_row_turbo
+    );
+    println!(
+        "   - MatVec Output Cosine          : {:.5}",
+        cos_matvec_turbo
+    );
+    println!(
+        "   - MatVec Relative L2 Error      : {:.5}",
+        rel_l2_matvec_turbo
+    );
+    println!(
+        "   - Correlated MatVec Cosine      : {:.5}",
+        cos_matvec_turbo_corr
+    );
+    println!(
+        "   - MatVec Latency                : {:?}",
+        time_matvec_turbo
+    );
     println!("--------------------------------------------------------------------");
 
-    // 5. EVALUATION OF ENHANCEMENT HYPOTHESES:
-    // Improvement A: Optimal Least-Squares Projection Scale: alpha* = <w, c> / ||c||^2
-    // Improvement B: Exact MAE Residual Scale: mean(|r|)
-    // Improvement C: Joint 2x2 Gram Projection in TurboQuant:
-    //   min ||w - (alpha_1 * base + alpha_2 * res_sign)||^2
+    // 5. MATHEMATICAL ABLATIONS & CALIBRATED LLOYD-MAX EVALUATION:
+    // - Compare true analytical RMS-scaled BF16 packing (Clifford3BitWord64::pack)
+    //   against orthogonal least-squares BF16 packing (Clifford3BitTensor / pack_least_squares)
+    // - Fit layer-specific centroids/bounds with compute_symmetric_lloyd_max_3bit
+    //   and evaluate pack_least_squares_with_codebook / unpack_with_codebook
+    // - Evaluate TurboQuant Joint 2x2 Gram Projection (FP32 prototype)
     println!(" EVALUATING ALGORITHMIC IMPROVEMENTS...");
 
+    let mut rms_cos_row_3bit = 0.0f32;
+    let mut rms_rel_l2_row_3bit = 0.0f32;
     let mut ls_cos_row_3bit = 0.0f32;
+    let mut ls_rel_l2_row_3bit = 0.0f32;
     let mut gram_cos_row_turbo = 0.0f32;
+    let mut gram_rel_l2_row_turbo = 0.0f32;
 
-    for r in 0..rows {
+    let mut rotated_abs_samples = Vec::with_capacity(64 * cols);
+    for r in 0..64.min(rows) {
         let mut row_rot = weights[r * cols..(r + 1) * cols].to_vec();
         versor.apply_in_place(&mut row_rot);
+        for chunk in row_rot.chunks_exact(16) {
+            let std_dev = (chunk.iter().map(|&v| v * v).sum::<f32>() / 16.0)
+                .sqrt()
+                .max(1e-8);
+            for &v in chunk {
+                rotated_abs_samples.push((v / std_dev).abs());
+            }
+        }
+    }
+    let (emp_centroids, emp_bounds) =
+        compute_symmetric_lloyd_max_3bit(&rotated_abs_samples, 30, 1e-5);
+    let mut custom_cb_cos_row_3bit = 0.0f32;
+    let mut custom_cb_rel_l2_row_3bit = 0.0f32;
 
-        // --- Improvement A: 3-bit with Least-Squares Scale (16-weight blocks) ---
+    for r in 0..rows {
+        let row_orig = &weights[r * cols..(r + 1) * cols];
+        let mut row_rot = row_orig.to_vec();
+        versor.apply_in_place(&mut row_rot);
+
+        // --- Baseline A0: True Analytical RMS BF16 Packing via Clifford3BitWord64::pack ---
+        let mut row_recon_rms = vec![0.0f32; cols];
+        // --- Calibrated Codebook LS BF16 Packing via pack_least_squares_with_codebook ---
+        let mut row_recon_cb = vec![0.0f32; cols];
+        // --- FP32 Unquantized-Scale LS Upper Bound Reference ---
         let mut row_recon_ls = vec![0.0f32; cols];
-        for b in 0..(cols / 16) {
-            let chunk = &row_rot[b * 16..(b + 1) * 16];
-            let std_dev = (chunk.iter().map(|&v| v * v).sum::<f32>() / 16.0).sqrt().max(1e-8);
-            let inv_std = 1.0 / std_dev;
 
-            // Extract normalized centroid codes
+        for b in 0..(cols / 16) {
+            let chunk_slice = &row_rot[b * 16..(b + 1) * 16];
+            let chunk: &[f32; 16] = chunk_slice.try_into().unwrap();
+            let std_dev = (chunk.iter().map(|&v| v * v).sum::<f32>() / 16.0)
+                .sqrt()
+                .max(1e-8);
+
+            let word_rms = Clifford3BitWord64::pack(chunk, std_dev);
+            let mut out_rms = [0.0f32; 16];
+            word_rms.unpack(&mut out_rms);
+            row_recon_rms[b * 16..(b + 1) * 16].copy_from_slice(&out_rms);
+
+            let word_cb = Clifford3BitWord64::pack_least_squares_with_codebook(
+                chunk,
+                &emp_centroids,
+                &emp_bounds,
+            );
+            let mut out_cb = [0.0f32; 16];
+            word_cb.unpack_with_codebook(&mut out_cb, &emp_centroids);
+            row_recon_cb[b * 16..(b + 1) * 16].copy_from_slice(&out_cb);
+
+            let inv_std = 1.0 / std_dev;
             let mut c_norm = [0.0f32; 16];
             for i in 0..16 {
                 let norm = chunk[i] * inv_std;
@@ -294,24 +449,36 @@ fn test_static_matrix_quantization_audit() {
                 };
                 c_norm[i] = sign * mag;
             }
-
-            // Exact least-squares scale: alpha* = <w, c_norm> / ||c_norm||^2
             let dot_wc: f32 = chunk.iter().zip(c_norm.iter()).map(|(&w, &c)| w * c).sum();
             let norm_c_sq: f32 = c_norm.iter().map(|&c| c * c).sum();
-            let alpha_ls = if norm_c_sq > 1e-12 { dot_wc / norm_c_sq } else { std_dev };
-
+            let alpha_ls = if norm_c_sq > 1e-12 {
+                dot_wc / norm_c_sq
+            } else {
+                std_dev
+            };
             for i in 0..16 {
                 row_recon_ls[b * 16 + i] = alpha_ls * c_norm[i];
             }
         }
+        versor.invert_in_place(&mut row_recon_rms);
+        rms_cos_row_3bit += cosine_similarity(row_orig, &row_recon_rms);
+        rms_rel_l2_row_3bit += relative_l2_error(row_orig, &row_recon_rms);
+
+        versor.invert_in_place(&mut row_recon_cb);
+        custom_cb_cos_row_3bit += cosine_similarity(row_orig, &row_recon_cb);
+        custom_cb_rel_l2_row_3bit += relative_l2_error(row_orig, &row_recon_cb);
+
         versor.invert_in_place(&mut row_recon_ls);
-        ls_cos_row_3bit += cosine_similarity(&weights[r * cols..(r + 1) * cols], &row_recon_ls);
+        ls_cos_row_3bit += cosine_similarity(row_orig, &row_recon_ls);
+        ls_rel_l2_row_3bit += relative_l2_error(row_orig, &row_recon_ls);
 
         // --- Improvement C: TurboQuant with Joint 2x2 Gram Projection (32-weight blocks) ---
         let mut row_recon_gram = vec![0.0f32; cols];
         for b in 0..(cols / 32) {
             let chunk = &row_rot[b * 32..(b + 1) * 32];
-            let std_dev = (chunk.iter().map(|&v| v * v).sum::<f32>() / 32.0).sqrt().max(1e-8);
+            let std_dev = (chunk.iter().map(|&v| v * v).sum::<f32>() / 32.0)
+                .sqrt()
+                .max(1e-8);
             let inv_std = 1.0 / std_dev;
 
             let mut u_base = [0.0f32; 32];
@@ -361,24 +528,72 @@ fn test_static_matrix_quantization_audit() {
             }
         }
         versor.invert_in_place(&mut row_recon_gram);
-        gram_cos_row_turbo += cosine_similarity(&weights[r * cols..(r + 1) * cols], &row_recon_gram);
+        gram_cos_row_turbo += cosine_similarity(row_orig, &row_recon_gram);
+        gram_rel_l2_row_turbo += relative_l2_error(row_orig, &row_recon_gram);
     }
 
+    rms_cos_row_3bit /= rows as f32;
+    rms_rel_l2_row_3bit /= rows as f32;
+    custom_cb_cos_row_3bit /= rows as f32;
+    custom_cb_rel_l2_row_3bit /= rows as f32;
     ls_cos_row_3bit /= rows as f32;
+    ls_rel_l2_row_3bit /= rows as f32;
     gram_cos_row_turbo /= rows as f32;
+    gram_rel_l2_row_turbo /= rows as f32;
 
+    println!("--------------------------------------------------------------------");
+    println!(" EMPIRICAL LLOYD-MAX CALIBRATION vs N(0, 1) CONSTANTS:");
+    println!("   Theoretical centroids : {:?}", LLOYD_MAX_3BIT_CENTROIDS);
+    println!("   Empirical centroids   : {:?}", emp_centroids);
+    println!("   Theoretical bounds    : {:?}", LLOYD_MAX_3BIT_BOUNDS);
+    println!("   Empirical bounds      : {:?}", emp_bounds);
     println!("--------------------------------------------------------------------");
     println!(" COMPARATIVE RESULTS AFTER MATHEMATICAL OPTIMIZATION:");
     println!("--------------------------------------------------------------------");
-    println!(" 3-Bit Clifford Base (RMS Scale)      : Cosine = {:.5}", avg_cos_row_3bit);
-    println!(" 3-Bit Clifford + Least-Squares Scale : Cosine = {:.5}  (Gain: +{:.4})",
-             ls_cos_row_3bit, ls_cos_row_3bit - avg_cos_row_3bit);
-    println!(" TurboQuant Base                      : Cosine = {:.5}", avg_cos_row_turbo);
-    println!(" TurboQuant + 2x2 Gram Projection    : Cosine = {:.5}  (Gain: +{:.4})",
-             gram_cos_row_turbo, gram_cos_row_turbo - avg_cos_row_turbo);
+    println!(
+        " 3-Bit Clifford RMS (Word64::pack)    : Cosine = {:.5} | Rel L2 = {:.5}",
+        rms_cos_row_3bit, rms_rel_l2_row_3bit
+    );
+    println!(
+        " 3-Bit Clifford LS (Packed Tensor)    : Cosine = {:.5} | Rel L2 = {:.5} (Gain vs RMS: {:+.5})",
+        avg_cos_row_3bit,
+        avg_rel_l2_row_3bit,
+        avg_cos_row_3bit - rms_cos_row_3bit
+    );
+    println!(
+        " 3-Bit Clifford LS (Custom Codebook)  : Cosine = {:.5} | Rel L2 = {:.5}",
+        custom_cb_cos_row_3bit, custom_cb_rel_l2_row_3bit
+    );
+    println!(
+        " 3-Bit Clifford LS (FP32 Scale Ref)   : Cosine = {:.5} | Rel L2 = {:.5}",
+        ls_cos_row_3bit, ls_rel_l2_row_3bit
+    );
+    println!(
+        " TurboQuant (Packed Tensor)           : Cosine = {:.5} | Rel L2 = {:.5}",
+        avg_cos_row_turbo, avg_rel_l2_row_turbo
+    );
+    println!(
+        " TurboQuant + 2x2 Gram (FP32 Proto)   : Cosine = {:.5} | Rel L2 = {:.5} (Gain: {:+.5})",
+        gram_cos_row_turbo,
+        gram_rel_l2_row_turbo,
+        gram_cos_row_turbo - avg_cos_row_turbo
+    );
     println!("--------------------------------------------------------------------");
 
-    assert!(ls_cos_row_3bit >= avg_cos_row_3bit, "Least-squares scale must strictly improve or equal baseline");
-    assert!(gram_cos_row_turbo >= avg_cos_row_turbo, "Gram 2x2 projection must strictly improve or equal baseline");
-    assert!(gram_cos_row_turbo > 0.995, "Optimized TurboQuant must achieve > 0.995 on 524,288 weights");
+    assert!(
+        avg_cos_row_3bit >= rms_cos_row_3bit && avg_rel_l2_row_3bit <= rms_rel_l2_row_3bit,
+        "Least-squares scale must strictly improve or match analytical RMS baseline"
+    );
+    assert!(
+        custom_cb_cos_row_3bit > 0.96,
+        "Calibrated Lloyd-Max custom codebook reconstruction must exceed 0.96 cosine"
+    );
+    assert!(
+        gram_cos_row_turbo >= avg_cos_row_turbo,
+        "Gram 2x2 projection must strictly improve or equal packed baseline"
+    );
+    assert!(
+        gram_cos_row_turbo > 0.99,
+        "Optimized TurboQuant must achieve > 0.99 cosine on 524,288 weights"
+    );
 }

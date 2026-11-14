@@ -3,9 +3,9 @@
 // License: Apache-2.0
 // ============================================================================
 
-use std::ops::{Add, Div, Mul, Neg, Sub};
-use super::point::PgaPoint;
 use super::line::PgaLine;
+use super::point::PgaPoint;
+use std::ops::{Add, Div, Mul, Neg, Sub};
 
 /// Plane in 3D Plane-based Projective Geometric Algebra Cl*(3, 0, 1).
 /// Grade-1 1-vector: P = a*e1 + b*e2 + c*e3 + d*e0.
@@ -62,7 +62,12 @@ impl PgaPlane {
     /// Ideal plane at infinity e0 (d = 1, a = b = c = 0).
     #[inline(always)]
     pub const fn infinity() -> Self {
-        Self { d: 1.0, a: 0.0, b: 0.0, c: 0.0 }
+        Self {
+            d: 1.0,
+            a: 0.0,
+            b: 0.0,
+            c: 0.0,
+        }
     }
 
     /// Normal direction vector [a, b, c].
@@ -115,11 +120,7 @@ impl PgaPlane {
         let [x, y, z] = p.to_euclidean();
         let signed_dist = n.a * x + n.b * y + n.c * z + n.d;
         let factor = 2.0 * signed_dist;
-        PgaPoint::new(
-            x - factor * n.a,
-            y - factor * n.b,
-            z - factor * n.c,
-        )
+        PgaPoint::new(x - factor * n.a, y - factor * n.b, z - factor * n.c)
     }
 
     /// Reflects another plane across this plane via 1-versor sandwich.

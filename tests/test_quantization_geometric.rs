@@ -7,9 +7,9 @@ fn test_geometric_quantization_comparison() {
 
     // Generate test vector with heavy outliers (resembling LLM activations / weights)
     let mut raw_vector = vec![0.0f32; dim];
-    for i in 0..dim {
+    for (i, dst) in raw_vector.iter_mut().enumerate() {
         let t = i as f32 * 0.1;
-        raw_vector[i] = (t.sin() * 0.5) + (t * 0.3).cos() * 0.2;
+        *dst = (t.sin() * 0.5) + (t * 0.3).cos() * 0.2;
     }
     // Inject 0.2% massive outlier channels (value = 40.0)
     raw_vector[12] = 42.0;
@@ -34,7 +34,10 @@ fn test_geometric_quantization_comparison() {
     let mut rotated = raw_vector.clone();
     versor.transform_in_place(&mut rotated);
     let rot_norm: f32 = rotated.iter().map(|&v| v * v).sum::<f32>().sqrt();
-    assert!((rot_norm - orig_norm).abs() < 1e-3, "Walsh transform must be an exact isometry");
+    assert!(
+        (rot_norm - orig_norm).abs() < 1e-3,
+        "Walsh transform must be an exact isometry"
+    );
 
     // Standard deviation after rotation
     let std_dev = (rotated.iter().map(|&v| v * v).sum::<f32>() / dim as f32).sqrt();
@@ -47,7 +50,11 @@ fn test_geometric_quantization_comparison() {
         let v = rotated[i];
         let sign = if v >= 0.0 { 1.0 } else { -1.0 };
         let abs_v = v.abs();
-        let mag = if abs_v < 0.9816 * std_dev { c2[0] } else { c2[1] };
+        let mag = if abs_v < 0.9816 * std_dev {
+            c2[0]
+        } else {
+            c2[1]
+        };
         recon_2bit_rotated[i] = sign * mag;
     }
     versor.invert_in_place(&mut recon_2bit_rotated);
@@ -137,23 +144,47 @@ fn test_geometric_quantization_comparison() {
 
     // 7. Dot product preservation with activation vector x
     let mut x_act = vec![0.0f32; dim];
-    for i in 0..dim {
+    for (i, dst) in x_act.iter_mut().enumerate() {
         let t = (i as f32 + 100.0) * 0.2;
-        x_act[i] = (t.sin() * 0.8) + (t * 0.5).cos() * 0.4;
+        *dst = (t.sin() * 0.8) + (t * 0.5).cos() * 0.4;
     }
     // Activation also has realistic non-aligned peaks
     x_act[50] = 30.0;
     x_act[200] = -25.0;
 
-    let dot_exact: f32 = raw_vector.iter().zip(x_act.iter()).map(|(&w, &x)| w * x).sum();
+    let dot_exact: f32 = raw_vector
+        .iter()
+        .zip(x_act.iter())
+        .map(|(&w, &x)| w * x)
+        .sum();
     let norm_act: f32 = x_act.iter().map(|&x| x * x).sum::<f32>().sqrt();
     let exact_cosine_proj = dot_exact / (orig_norm * norm_act);
 
-    let dot_2bit_unrot: f32 = recon_2bit_unrotated.iter().zip(x_act.iter()).map(|(&w, &x)| w * x).sum();
-    let dot_2bit_rot: f32 = recon_2bit_rotated.iter().zip(x_act.iter()).map(|(&w, &x)| w * x).sum();
-    let dot_3bit_rot: f32 = recon_3bit_rotated.iter().zip(x_act.iter()).map(|(&w, &x)| w * x).sum();
-    let dot_3_5bit_rot: f32 = recon_3_5bit.iter().zip(x_act.iter()).map(|(&w, &x)| w * x).sum();
-    let dot_4bit_rot: f32 = recon_4bit_rotated.iter().zip(x_act.iter()).map(|(&w, &x)| w * x).sum();
+    let dot_2bit_unrot: f32 = recon_2bit_unrotated
+        .iter()
+        .zip(x_act.iter())
+        .map(|(&w, &x)| w * x)
+        .sum();
+    let dot_2bit_rot: f32 = recon_2bit_rotated
+        .iter()
+        .zip(x_act.iter())
+        .map(|(&w, &x)| w * x)
+        .sum();
+    let dot_3bit_rot: f32 = recon_3bit_rotated
+        .iter()
+        .zip(x_act.iter())
+        .map(|(&w, &x)| w * x)
+        .sum();
+    let dot_3_5bit_rot: f32 = recon_3_5bit
+        .iter()
+        .zip(x_act.iter())
+        .map(|(&w, &x)| w * x)
+        .sum();
+    let dot_4bit_rot: f32 = recon_4bit_rotated
+        .iter()
+        .zip(x_act.iter())
+        .map(|(&w, &x)| w * x)
+        .sum();
 
     let err_2bit_unrot = (dot_exact - dot_2bit_unrot).abs() / (orig_norm * norm_act);
     let err_2bit_rot = (dot_exact - dot_2bit_rot).abs() / (orig_norm * norm_act);
@@ -162,24 +193,63 @@ fn test_geometric_quantization_comparison() {
     let err_4bit_rot = (dot_exact - dot_4bit_rot).abs() / (orig_norm * norm_act);
 
     println!("------------------------------------------------------------");
-    println!(" COMPARATIVA EMPÍRICA DE CUANTIZACIÓN (Dim = {})", dim);
+    println!(" EMPIRICAL QUANTIZATION COMPARISON (Dim = {})", dim);
     println!("------------------------------------------------------------");
-    println!(" 2-bit Directo sin rotar (BitNet) : Cosine = {:.4} | Dot Error = {:.4}", cos_2bit_unrotated, err_2bit_unrot);
-    println!(" 2-bit Rotado con Dyadic Versor  : Cosine = {:.4} | Dot Error = {:.4}", cos_2bit_rotated, err_2bit_rot);
-    println!(" 3-bit Rotado Lloyd-Max (Turbo)  : Cosine = {:.4} | Dot Error = {:.4}", cos_3bit_rotated, err_3bit_rot);
-    println!(" 3.5-bit TurboQuant (+QJL Res)   : Cosine = {:.4} | Dot Error = {:.4}", cos_3_5bit_rotated, err_3_5bit_rot);
-    println!(" 4-bit Rotado (INT4 Isométrico)  : Cosine = {:.4} | Dot Error = {:.4}", cos_4bit_rotated, err_4bit_rot);
+    println!(
+        " 2-bit Direct Unrotated (BitNet) : Cosine = {:.4} | Dot Error = {:.4}",
+        cos_2bit_unrotated, err_2bit_unrot
+    );
+    println!(
+        " 2-bit Dyadic Versor Rotated     : Cosine = {:.4} | Dot Error = {:.4}",
+        cos_2bit_rotated, err_2bit_rot
+    );
+    println!(
+        " 3-bit Rotated Lloyd-Max (Turbo) : Cosine = {:.4} | Dot Error = {:.4}",
+        cos_3bit_rotated, err_3bit_rot
+    );
+    println!(
+        " 3.5-bit TurboQuant (+QJL Res)   : Cosine = {:.4} | Dot Error = {:.4}",
+        cos_3_5bit_rotated, err_3_5bit_rot
+    );
+    println!(
+        " 4-bit Isometric INT4 Rotated    : Cosine = {:.4} | Dot Error = {:.4}",
+        cos_4bit_rotated, err_4bit_rot
+    );
     println!("------------------------------------------------------------");
-    println!(" Proyección de producto interno exacta: {:.4}", exact_cosine_proj);
-    println!(" Proyección 2-bit unrotated:            {:.4}", dot_2bit_unrot / (orig_norm * norm_act));
-    println!(" Proyección 3-bit rotated:              {:.4}", dot_3bit_rot / (orig_norm * norm_act));
-    println!(" Proyección 3.5-bit rotated:            {:.4}", dot_3_5bit_rot / (orig_norm * norm_act));
+    println!(
+        " Exact inner product projection   : {:.4}",
+        exact_cosine_proj
+    );
+    println!(
+        " 2-bit unrotated projection       : {:.4}",
+        dot_2bit_unrot / (orig_norm * norm_act)
+    );
+    println!(
+        " 3-bit rotated projection         : {:.4}",
+        dot_3bit_rot / (orig_norm * norm_act)
+    );
+    println!(
+        " 3.5-bit rotated projection       : {:.4}",
+        dot_3_5bit_rot / (orig_norm * norm_act)
+    );
     println!("------------------------------------------------------------");
 
-    assert!(cos_3bit_rotated > 0.985, "3-bit rotated must achieve > 0.985 cosine similarity");
-    assert!(cos_3_5bit_rotated > 0.995, "3.5-bit TurboQuant must achieve > 0.995 cosine similarity");
-    assert!(err_3bit_rot < 0.05, "3-bit rotated dot product error must be < 5%");
-    assert!(err_3_5bit_rot < 0.02, "3.5-bit TurboQuant dot product error must be < 2%");
+    assert!(
+        cos_3bit_rotated > 0.985,
+        "3-bit rotated must achieve > 0.985 cosine similarity"
+    );
+    assert!(
+        cos_3_5bit_rotated > 0.995,
+        "3.5-bit TurboQuant must achieve > 0.995 cosine similarity"
+    );
+    assert!(
+        err_3bit_rot < 0.05,
+        "3-bit rotated dot product error must be < 5%"
+    );
+    assert!(
+        err_3_5bit_rot < 0.02,
+        "3.5-bit TurboQuant dot product error must be < 2%"
+    );
 }
 
 #[test]
@@ -187,14 +257,26 @@ fn test_clifford_3bit_word_packing_and_alignment() {
     use std::mem::{align_of, size_of};
 
     // 1. Verify strict hardware cache-line alignment and size guarantees
-    assert_eq!(size_of::<Clifford3BitWord64>(), 8, "Word must be exactly 8 bytes (64 bits)");
-    assert_eq!(size_of::<Clifford3BitCacheLine64>(), 64, "Cache line must be exactly 64 bytes");
-    assert_eq!(align_of::<Clifford3BitCacheLine64>(), 64, "Cache line must be 64-byte aligned");
+    assert_eq!(
+        size_of::<Clifford3BitWord64>(),
+        8,
+        "Word must be exactly 8 bytes (64 bits)"
+    );
+    assert_eq!(
+        size_of::<Clifford3BitCacheLine64>(),
+        64,
+        "Cache line must be exactly 64 bytes"
+    );
+    assert_eq!(
+        align_of::<Clifford3BitCacheLine64>(),
+        64,
+        "Cache line must be 64-byte aligned"
+    );
 
     // 2. Test 16-weight word packing and unpacking
     let weights: [f32; 16] = [
-        0.12, -0.45, 0.88, -1.25, 2.10, -0.05, 0.33, -0.76,
-        1.05, -1.80, 0.50, -0.22, 1.45, -0.90, 0.02, -0.60,
+        0.12, -0.45, 0.88, -1.25, 2.10, -0.05, 0.33, -0.76, 1.05, -1.80, 0.50, -0.22, 1.45, -0.90,
+        0.02, -0.60,
     ];
     let scale = 1.0f32;
     let word = Clifford3BitWord64::pack(&weights, scale);
@@ -209,40 +291,60 @@ fn test_clifford_3bit_word_packing_and_alignment() {
     }
 
     // Dot product with slice must match manual dot
-    let manual_dot: f32 = unpacked.iter().zip(weights.iter()).map(|(&a, &b)| a * b).sum();
+    let manual_dot: f32 = unpacked
+        .iter()
+        .zip(weights.iter())
+        .map(|(&a, &b)| a * b)
+        .sum();
     let word_dot = word.dot_with_slice(&weights);
     assert!((manual_dot - word_dot).abs() < 1e-4);
 
     // 3. Test 128-weight cache line packing
     let mut w128 = [0.0f32; 128];
-    for i in 0..128 {
-        w128[i] = ((i as f32 * 0.2).sin() * 1.5) + ((i as f32 * 0.1).cos() * 0.5);
+    for (i, dst) in w128.iter_mut().enumerate() {
+        *dst = ((i as f32 * 0.2).sin() * 1.5) + ((i as f32 * 0.1).cos() * 0.5);
     }
     let cache_line = Clifford3BitCacheLine64::pack_128(&w128);
     let mut unp128 = [0.0f32; 128];
     cache_line.unpack_128(&mut unp128);
 
     let cos_line = cosine_similarity(&w128, &unp128);
-    assert!(cos_line > 0.98, "128-weight cache line reconstruction cosine must exceed 0.98, got {}", cos_line);
+    assert!(
+        cos_line > 0.98,
+        "128-weight cache line reconstruction cosine must exceed 0.98, got {}",
+        cos_line
+    );
 }
 
 #[test]
 fn test_turboquant_block32_and_cache_line() {
     use std::mem::{align_of, size_of};
 
-    assert_eq!(size_of::<TurboQuantCacheLine64>(), 64, "TurboQuant line must be 64 bytes");
-    assert_eq!(align_of::<TurboQuantCacheLine64>(), 64, "TurboQuant line must be 64-byte aligned");
+    assert_eq!(
+        size_of::<TurboQuantCacheLine64>(),
+        64,
+        "TurboQuant line must be 64 bytes"
+    );
+    assert_eq!(
+        align_of::<TurboQuantCacheLine64>(),
+        64,
+        "TurboQuant line must be 64-byte aligned"
+    );
 
     let mut w32 = [0.0f32; 32];
-    for i in 0..32 {
-        w32[i] = (i as f32 * 0.3).sin() * 2.0;
+    for (i, dst) in w32.iter_mut().enumerate() {
+        *dst = (i as f32 * 0.3).sin() * 2.0;
     }
     let block = TurboQuantBlock32::pack(&w32);
     let mut unp32 = [0.0f32; 32];
     block.unpack(&mut unp32);
 
     let cos_32 = cosine_similarity(&w32, &unp32);
-    assert!(cos_32 > 0.99, "TurboQuant 32-weight block cosine must exceed 0.99, got {}", cos_32);
+    assert!(
+        cos_32 > 0.99,
+        "TurboQuant 32-weight block cosine must exceed 0.99, got {}",
+        cos_32
+    );
 
     let dot_block = block.dot_with_slice(&w32);
     let manual_dot: f32 = unp32.iter().zip(w32.iter()).map(|(&a, &b)| a * b).sum();
@@ -272,9 +374,9 @@ fn test_clifford_3bit_tensor_matvec_dual_isometry() {
 
     // Input activation vector x with separate outlier
     let mut x = vec![0.0f32; cols];
-    for c in 0..cols {
+    for (c, dst) in x.iter_mut().enumerate() {
         let t = (c as f32 + 50.0) * 0.1;
-        x[c] = (t.sin() * 0.5) + (t * 0.2).cos() * 0.5;
+        *dst = (t.sin() * 0.5) + (t * 0.2).cos() * 0.5;
     }
     x[100] = 35.0;
 
@@ -294,7 +396,10 @@ fn test_clifford_3bit_tensor_matvec_dual_isometry() {
 
     // Compute cosine similarity between exact FP32 output and 3-bit output
     let cos_matvec = cosine_similarity(&y_exact, &y_3bit);
-    println!("Matrix-Vector Output Cosine Similarity (3-bit Clifford): {:.5}", cos_matvec);
+    println!(
+        "Matrix-Vector Output Cosine Similarity (3-bit Clifford): {:.5}",
+        cos_matvec
+    );
 
     // 3. Test TurboQuant tensor matvec
     let tensor_turbo = TurboQuantTensor::compile_aot(&weights, rows, cols, &versor);
@@ -302,22 +407,133 @@ fn test_clifford_3bit_tensor_matvec_dual_isometry() {
     tensor_turbo.matvec(&x, &mut y_turbo, &versor);
 
     let cos_turbo = cosine_similarity(&y_exact, &y_turbo);
-    println!("Matrix-Vector Output Cosine Similarity (TurboQuant):      {:.5}", cos_turbo);
+    println!(
+        "Matrix-Vector Output Cosine Similarity (TurboQuant):      {:.5}",
+        cos_turbo
+    );
 
     // Check row 0 reconstruction cosine
     let mut row0_recon = vec![0.0f32; cols];
     let lines_per_row = cols / 128;
     for l in 0..lines_per_row {
-        let chunk: &mut [f32; 128] = (&mut row0_recon[l * 128..(l + 1) * 128]).try_into().unwrap();
+        let chunk: &mut [f32; 128] = (&mut row0_recon[l * 128..(l + 1) * 128])
+            .try_into()
+            .unwrap();
         tensor_3bit.cache_lines[l].unpack_128(chunk);
     }
     versor.invert_in_place(&mut row0_recon);
     let cos_row0 = cosine_similarity(&weights[0..cols], &row0_recon);
-    println!("Row 0 Weight Reconstruction Cosine:                     {:.5}", cos_row0);
+    println!(
+        "Row 0 Weight Reconstruction Cosine:                     {:.5}",
+        cos_row0
+    );
 
-    assert!(cos_matvec > 0.94, "Matvec cosine similarity with 3-bit Clifford must exceed 0.94");
-    assert!(cos_turbo > 0.98, "Matvec cosine similarity with TurboQuant must exceed 0.98");
-    assert!(cos_row0 > 0.984, "Row 0 reconstruction cosine must exceed 0.984");
+    assert!(
+        cos_matvec > 0.94,
+        "Matvec cosine similarity with 3-bit Clifford must exceed 0.94"
+    );
+    assert!(
+        cos_turbo > 0.98,
+        "Matvec cosine similarity with TurboQuant must exceed 0.98"
+    );
+    assert!(
+        cos_row0 > 0.984,
+        "Row 0 reconstruction cosine must exceed 0.984"
+    );
+}
+
+#[test]
+fn test_clifford_3bit_matvec_avx2_vs_scalar_strict_equivalence() {
+    let rows = 64;
+    let cols = 256;
+    let mut weights = vec![0.0f32; rows * cols];
+    for r in 0..rows {
+        for c in 0..cols {
+            let t = (r * cols + c) as f32 * 0.05;
+            weights[r * cols + c] = t.sin() * 0.8 + (t * 0.3).cos() * 0.4;
+        }
+    }
+
+    let mut x = vec![0.0f32; cols];
+    for (c, dst) in x.iter_mut().enumerate() {
+        let t = (c as f32 + 10.0) * 0.08;
+        *dst = t.sin() * 0.6 + (t * 0.5).cos() * 0.3;
+    }
+
+    let versor = DyadicWalshVersor::new(cols, 424242);
+    let tensor = Clifford3BitTensor::compile_aot(&weights, rows, cols, &versor);
+
+    // 1. Explicit scalar evaluation
+    let mut out_scalar = vec![0.0f32; rows];
+    tensor.matvec_scalar(&x, &mut out_scalar, &versor);
+
+    // 2. Hardware-dispatched evaluation (AVX2 on x86_64)
+    let mut out_hw = vec![0.0f32; rows];
+    tensor.matvec(&x, &mut out_hw, &versor);
+
+    // 3. Strict equivalence test (floating-point tolerance due to FMA vs scalar mul-add)
+    for r in 0..rows {
+        let diff = (out_scalar[r] - out_hw[r]).abs();
+        assert!(
+            diff < 1e-4,
+            "Discrepancy at row {}: scalar={}, hw={}, diff={}",
+            r,
+            out_scalar[r],
+            out_hw[r],
+            diff
+        );
+    }
+}
+
+#[test]
+fn test_lloyd_max_dynamic_convergence_and_recovery() {
+    // Generate empirical half-normal samples using Box-Muller transform
+    let n = 200_000;
+    let mut abs_samples = Vec::with_capacity(n);
+    let mut state = 0x1234_5678_9ABC_DEF0u64;
+
+    for _ in 0..(n / 2) {
+        state = state.wrapping_mul(6364136223846793005).wrapping_add(1);
+        let u1 = ((state >> 32) as f32 + 1.0) / 4294967297.0;
+        state = state.wrapping_mul(6364136223846793005).wrapping_add(1);
+        let u2 = ((state >> 32) as f32 + 1.0) / 4294967297.0;
+
+        let r = (-2.0 * u1.ln()).sqrt();
+        let theta = 2.0 * std::f32::consts::PI * u2;
+        let z0 = r * theta.cos();
+        let z1 = r * theta.sin();
+
+        abs_samples.push(z0.abs());
+        abs_samples.push(z1.abs());
+    }
+
+    // Run dynamic iterative Lloyd-Max algorithm (EM)
+    let (centroids, bounds) = compute_symmetric_lloyd_max_3bit(&abs_samples, 50, 1e-5);
+
+    // Verify convergence to canonical values within statistical sampling variance (tol < 0.015)
+    for k in 0..4 {
+        let diff = (centroids[k] - LLOYD_MAX_3BIT_CENTROIDS[k]).abs();
+        assert!(
+            diff < 0.015,
+            "Centroid {} mismatch: dynamic={}, canonical={}, diff={}",
+            k,
+            centroids[k],
+            LLOYD_MAX_3BIT_CENTROIDS[k],
+            diff
+        );
+    }
+
+    for k in 0..3 {
+        let diff = (bounds[k] - LLOYD_MAX_3BIT_BOUNDS[k]).abs();
+        assert!(
+            diff < 0.015,
+            "Bound {} mismatch: dynamic={}, canonical={}, diff={}",
+            k,
+            bounds[k],
+            LLOYD_MAX_3BIT_BOUNDS[k],
+            diff
+        );
+    }
 }
 
 fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {

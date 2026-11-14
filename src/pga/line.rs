@@ -3,9 +3,9 @@
 // License: Apache-2.0
 // ============================================================================
 
-use std::ops::{Add, Div, Mul, Neg, Sub};
-use super::point::PgaPoint;
 use super::plane::PgaPlane;
+use super::point::PgaPoint;
+use std::ops::{Add, Div, Mul, Neg, Sub};
 
 /// Line in 3D Projective Geometric Algebra Cl*(3, 0, 1) (Plücker bivector).
 /// Composed of Euclidean direction (vx, vy, vz) and moment (mx, my, mz) about origin.
@@ -185,14 +185,7 @@ impl Neg for PgaLine {
     type Output = Self;
     #[inline(always)]
     fn neg(self) -> Self {
-        Self::new(
-            -self.vx,
-            -self.vy,
-            -self.vz,
-            -self.mx,
-            -self.my,
-            -self.mz,
-        )
+        Self::new(-self.vx, -self.vy, -self.vz, -self.mx, -self.my, -self.mz)
     }
 }
 

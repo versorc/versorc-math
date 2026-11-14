@@ -23,9 +23,21 @@ fn test_dual_quaternion_rigid_transformation_and_inversion() {
     // Translated by (10, 20, 30): (10, 20, 29)
     let pt = [1.0, 0.0, 0.0];
     let pt_t = dq.transform_point(&pt);
-    assert!((pt_t[0] - 10.0).abs() < 1e-5, "Expected 10.0, got {}", pt_t[0]);
-    assert!((pt_t[1] - 20.0).abs() < 1e-5, "Expected 20.0, got {}", pt_t[1]);
-    assert!((pt_t[2] - 29.0).abs() < 1e-5, "Expected 29.0, got {}", pt_t[2]);
+    assert!(
+        (pt_t[0] - 10.0).abs() < 1e-5,
+        "Expected 10.0, got {}",
+        pt_t[0]
+    );
+    assert!(
+        (pt_t[1] - 20.0).abs() < 1e-5,
+        "Expected 20.0, got {}",
+        pt_t[1]
+    );
+    assert!(
+        (pt_t[2] - 29.0).abs() < 1e-5,
+        "Expected 29.0, got {}",
+        pt_t[2]
+    );
 
     // Vector rotation (no translation applied)
     let v_t = dq.transform_vector(&pt);

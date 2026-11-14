@@ -2,20 +2,20 @@
 // VERSORC-MATH: VULKAN & SPIR-V COMPUTE SHADERS FOR GEOMETRIC OPERATIONS
 // License: Apache-2.0
 //
-// Precompiled SPIR-V 1.3+ bytecode for GPU-accelerated versor, lattice,
-// and dense vector operations. Can be embedded directly by any Vulkan runtime
-// (including `versorc-tiering` and external graphics/compute pipelines).
+// Precompiled SPIR-V 1.3+ (Vulkan 1.1 target) bytecode for GPU-accelerated versor,
+// Clifford, conformal, hyperbolic, and dense compute operations. Can be embedded
+// directly by any Vulkan runtime or external compute pipeline.
 // ============================================================================
 
 pub const ROPE_SPV: &[u8] = include_bytes!("../../shaders/rope.spv");
 pub const SILU_MUL_SPV: &[u8] = include_bytes!("../../shaders/silu_mul.spv");
 pub const RMSNORM_SPV: &[u8] = include_bytes!("../../shaders/rmsnorm.spv");
 pub const VEC_ADD_SPV: &[u8] = include_bytes!("../../shaders/vec_add.spv");
-pub const HOT_STRATUM_E8_SPV: &[u8] = include_bytes!("../../shaders/hot_stratum_e8.spv");
 pub const PGA_TRANSFORM_SPV: &[u8] = include_bytes!("../../shaders/pga_transform.spv");
 pub const CGA_TRANSFORM_SPV: &[u8] = include_bytes!("../../shaders/cga_transform.spv");
 pub const GA_CL3_BATCH_SPV: &[u8] = include_bytes!("../../shaders/ga_cl3_batch.spv");
-pub const POINCARE_MOBIUS_BATCH_SPV: &[u8] = include_bytes!("../../shaders/poincare_mobius_batch.spv");
+pub const POINCARE_MOBIUS_BATCH_SPV: &[u8] =
+    include_bytes!("../../shaders/poincare_mobius_batch.spv");
 
 /// Push constant payload for Planar Spinor Bank (RoPE) compute shader.
 #[repr(C)]
@@ -111,21 +111,6 @@ impl VecAddPushConstants {
             _pad2: 0,
         }
     }
-}
-
-/// Push constant payload for Gosset E8 Lattice projection on GPU.
-#[repr(C)]
-#[derive(Debug, Clone, Copy, PartialEq)]
-#[cfg_attr(feature = "vulkan", derive(bytemuck::Pod, bytemuck::Zeroable))]
-pub struct HotStratumE8PushConstants {
-    pub d_model: u32,
-    pub neuron_count: u32,
-    pub pass_id: u32,
-    pub layer_gamma: f32,
-    pub beta: f32,
-    pub gate_gamma: f32,
-    pub up_gamma: f32,
-    pub words_per_row: u32,
 }
 
 /// Push constant payload for 3D Projective Geometric Algebra (PGA) rigid tensor transform on GPU.
@@ -276,7 +261,12 @@ pub struct PoincareBatchPushConstants {
 }
 
 impl PoincareBatchPushConstants {
-    pub fn new(num_elements: u32, op_code: u32, sphere_center: [f32; 3], sphere_radius: f32) -> Self {
+    pub fn new(
+        num_elements: u32,
+        op_code: u32,
+        sphere_center: [f32; 3],
+        sphere_radius: f32,
+    ) -> Self {
         Self {
             num_elements,
             op_code,

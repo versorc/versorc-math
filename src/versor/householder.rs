@@ -22,7 +22,10 @@ impl HouseholderVersor {
         for &x in &v {
             norm_sq += x * x;
         }
-        assert!(norm_sq > 1e-15, "Householder normal vector cannot have zero norm");
+        assert!(
+            norm_sq > 1e-15,
+            "Householder normal vector cannot have zero norm"
+        );
         let tau = 2.0 / norm_sq;
         Self { v, tau }
     }
@@ -37,13 +40,10 @@ impl HouseholderVersor {
     #[inline]
     pub fn reflect_in_place(&self, x: &mut [f32]) {
         assert_eq!(x.len(), self.v.len(), "Vector dimension mismatch");
-        let mut dot = 0.0f32;
-        for i in 0..x.len() {
-            dot += self.v[i] * x[i];
-        }
+        let dot: f32 = self.v.iter().zip(x.iter()).map(|(&vi, &xi)| vi * xi).sum();
         let alpha = dot * self.tau;
-        for i in 0..x.len() {
-            x[i] -= alpha * self.v[i];
+        for (xi, &vi) in x.iter_mut().zip(self.v.iter()) {
+            *xi -= alpha * vi;
         }
     }
 }
@@ -111,12 +111,12 @@ impl HouseholderChain {
         // Apply reflections to columns of Identity
         let mut col = vec![0.0f32; n];
         for j in 0..n {
-            for i in 0..n {
-                col[i] = if i == j { 1.0 } else { 0.0 };
+            for (i, c) in col.iter_mut().enumerate() {
+                *c = if i == j { 1.0 } else { 0.0 };
             }
             self.apply_in_place(&mut col);
-            for i in 0..n {
-                q[i * n + j] = col[i];
+            for (i, &c) in col.iter().enumerate() {
+                q[i * n + j] = c;
             }
         }
         q

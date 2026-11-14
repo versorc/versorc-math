@@ -3,12 +3,12 @@
 // License: Apache-2.0
 // ============================================================================
 
-pub mod plane;
-pub mod point;
 pub mod line;
 pub mod motor;
+pub mod plane;
+pub mod point;
 
-pub use plane::PgaPlane;
-pub use point::PgaPoint;
 pub use line::PgaLine;
 pub use motor::PgaMotor;
+pub use plane::PgaPlane;
+pub use point::PgaPoint;

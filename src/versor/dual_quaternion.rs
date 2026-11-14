@@ -3,9 +3,9 @@
 // License: Apache-2.0
 // ============================================================================
 
-use std::ops::{Add, Mul, Neg, Sub};
 use super::hamilton::Quaternion;
 use crate::pga::PgaMotor;
+use std::ops::{Add, Mul, Neg, Sub};
 
 /// Dual Quaternion Q = q_r + \epsilon * q_d in H \otimes D ~= Cl+(3, 0, 1).
 /// Isomorphic to the even subalgebra of 3D PGA, uniting rotation and translation into a single 8-D element.
@@ -178,7 +178,11 @@ impl DualQuaternion {
     /// Used globally in GPU skeletal animation and robotics blending.
     #[inline]
     pub fn dlb(weights: &[f32], dqs: &[Self]) -> Self {
-        assert_eq!(weights.len(), dqs.len(), "Weights and dual quaternions length mismatch");
+        assert_eq!(
+            weights.len(),
+            dqs.len(),
+            "Weights and dual quaternions length mismatch"
+        );
         assert!(!dqs.is_empty(), "Cannot blend empty dual quaternions");
 
         let mut sum_real = Quaternion::new(0.0, 0.0, 0.0, 0.0);
@@ -188,7 +192,13 @@ impl DualQuaternion {
 
         for (i, (&w, dq)) in weights.iter().zip(dqs.iter()).enumerate() {
             // Hemisphere alignment: ensure inner product with first real quaternion >= 0
-            let sign = if i > 0 && (dq.real.w * q0.real.w + dq.real.x * q0.real.x + dq.real.y * q0.real.y + dq.real.z * q0.real.z) < 0.0 {
+            let sign = if i > 0
+                && (dq.real.w * q0.real.w
+                    + dq.real.x * q0.real.x
+                    + dq.real.y * q0.real.y
+                    + dq.real.z * q0.real.z)
+                    < 0.0
+            {
                 -1.0
             } else {
                 1.0
@@ -288,13 +298,7 @@ impl From<DualQuaternion> for PgaMotor {
     #[inline]
     fn from(dq: DualQuaternion) -> Self {
         PgaMotor::new(
-            dq.real.w,
-            -dq.real.x,
-            -dq.real.y,
-            -dq.real.z,
-            -dq.dual.x,
-            -dq.dual.y,
-            -dq.dual.z,
+            dq.real.w, -dq.real.x, -dq.real.y, -dq.real.z, -dq.dual.x, -dq.dual.y, -dq.dual.z,
             -dq.dual.w,
         )
     }

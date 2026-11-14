@@ -17,7 +17,10 @@ fn test_single_householder_1_versor_involution() {
     h.reflect_in_place(&mut x);
 
     for (a, b) in original.iter().zip(&x) {
-        assert!((a - b).abs() < 1e-6, "Householder 1-versor must be an exact involution H^2 = I");
+        assert!(
+            (a - b).abs() < 1e-6,
+            "Householder 1-versor must be an exact involution H^2 = I"
+        );
     }
 }
 
@@ -27,9 +30,15 @@ fn test_householder_chain_matches_dense_orthogonal_matrix() {
     let mut chain = HouseholderChain::new(dim);
 
     // Add 4 random reflection versores
-    chain.push(HouseholderVersor::new(vec![1.0, 0.0, -1.0, 2.0, 0.5, -0.5, 1.2, 0.0]));
-    chain.push(HouseholderVersor::new(vec![0.2, 1.1, 0.0, -0.4, 0.0, 2.0, -1.0, 0.8]));
-    chain.push(HouseholderVersor::new(vec![-0.5, 0.0, 1.5, 0.3, 0.7, -0.2, 0.0, 1.0]));
+    chain.push(HouseholderVersor::new(vec![
+        1.0, 0.0, -1.0, 2.0, 0.5, -0.5, 1.2, 0.0,
+    ]));
+    chain.push(HouseholderVersor::new(vec![
+        0.2, 1.1, 0.0, -0.4, 0.0, 2.0, -1.0, 0.8,
+    ]));
+    chain.push(HouseholderVersor::new(vec![
+        -0.5, 0.0, 1.5, 0.3, 0.7, -0.2, 0.0, 1.0,
+    ]));
 
     let q = chain.to_dense_matrix();
 
@@ -41,7 +50,12 @@ fn test_householder_chain_matches_dense_orthogonal_matrix() {
                 dot += q[k * dim + r] * q[k * dim + c];
             }
             let expected = if r == c { 1.0 } else { 0.0 };
-            assert!((dot - expected).abs() < 1e-5, "Reconstructed matrix must be orthonormal at ({}, {})", r, c);
+            assert!(
+                (dot - expected).abs() < 1e-5,
+                "Reconstructed matrix must be orthonormal at ({}, {})",
+                r,
+                c
+            );
         }
     }
 

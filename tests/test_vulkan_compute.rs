@@ -8,7 +8,6 @@ fn test_vulkan_spirv_shaders_integrity() {
         ("SILU_MUL_SPV", SILU_MUL_SPV),
         ("RMSNORM_SPV", RMSNORM_SPV),
         ("VEC_ADD_SPV", VEC_ADD_SPV),
-        ("HOT_STRATUM_E8_SPV", HOT_STRATUM_E8_SPV),
         ("PGA_TRANSFORM_SPV", PGA_TRANSFORM_SPV),
         ("CGA_TRANSFORM_SPV", CGA_TRANSFORM_SPV),
         ("GA_CL3_BATCH_SPV", GA_CL3_BATCH_SPV),
@@ -59,19 +58,29 @@ fn test_vulkan_push_constants_layouts() {
 #[test]
 fn test_vulkan_gpu_probe_and_shader_compilation() {
     let gpus = GpuComputeContext::probe_devices().expect("Vulkan driver must probe available GPUs");
-    assert!(!gpus.is_empty(), "At least one Vulkan GPU must be discovered on this host");
+    assert!(
+        !gpus.is_empty(),
+        "At least one Vulkan GPU must be discovered on this host"
+    );
 
     println!("Discovered {} Vulkan device(s):", gpus.len());
     for gpu in &gpus {
         println!(" - {} (Discrete: {})", gpu.name, gpu.is_discrete);
     }
 
-    let ctx = GpuComputeContext::init_compute().expect("Vulkan compute context initialization failed");
+    let ctx =
+        GpuComputeContext::init_compute().expect("Vulkan compute context initialization failed");
 
     // Verify creating shader modules directly from embedded SPIR-V
-    let rope_module = ctx.create_shader_module(ROPE_SPV).expect("ROPE shader module creation failed");
-    let silu_module = ctx.create_shader_module(SILU_MUL_SPV).expect("SILU shader module creation failed");
-    let rms_module = ctx.create_shader_module(RMSNORM_SPV).expect("RMSNorm shader module creation failed");
+    let rope_module = ctx
+        .create_shader_module(ROPE_SPV)
+        .expect("ROPE shader module creation failed");
+    let silu_module = ctx
+        .create_shader_module(SILU_MUL_SPV)
+        .expect("SILU shader module creation failed");
+    let rms_module = ctx
+        .create_shader_module(RMSNORM_SPV)
+        .expect("RMSNorm shader module creation failed");
 
     unsafe {
         ctx.device.destroy_shader_module(rope_module, None);
@@ -83,7 +92,8 @@ fn test_vulkan_gpu_probe_and_shader_compilation() {
 #[cfg(feature = "vulkan")]
 #[test]
 fn test_vulkan_gpu_pga_tensor_execution() {
-    let ctx = GpuComputeContext::init_compute().expect("Vulkan compute context initialization failed");
+    let ctx =
+        GpuComputeContext::init_compute().expect("Vulkan compute context initialization failed");
 
     // 1. Create a test tensor of 256 3D points
     let n = 256;
@@ -101,7 +111,8 @@ fn test_vulkan_gpu_pga_tensor_execution() {
     );
 
     // 3. Dispatch computation on physical GPU
-    let gpu_results = ctx.dispatch_pga_transform(&host_points, &motor)
+    let gpu_results = ctx
+        .dispatch_pga_transform(&host_points, &motor)
         .expect("GPU PGA tensor transform dispatch failed");
 
     assert_eq!(gpu_results.len(), n);
@@ -120,7 +131,9 @@ fn test_vulkan_gpu_pga_tensor_execution() {
         assert!(
             err_x < 1e-4 && err_y < 1e-4 && err_z < 1e-4,
             "GPU vs CPU mismatch at index {}: GPU {:?} vs CPU {:?}",
-            i, gpu_pt, cpu_transformed
+            i,
+            gpu_pt,
+            cpu_transformed
         );
     }
 
@@ -128,9 +141,55 @@ fn test_vulkan_gpu_pga_tensor_execution() {
     let a: Vec<f32> = (0..512).map(|x| x as f32 * 0.5).collect();
     let b: Vec<f32> = (0..512).map(|x| 100.0 - x as f32).collect();
 
-    let add_results = ctx.dispatch_vec_add(&a, &b).expect("GPU vector addition failed");
+    let add_results = ctx
+        .dispatch_vec_add(&a, &b)
+        .expect("GPU vector addition failed");
     for i in 0..512 {
         let expected = a[i] + b[i];
         assert!((add_results[i] - expected).abs() < 1e-5);
     }
+
+    // 6. Pipeline cache must reuse compiled pipelines across repeated dispatches
+    let count_after_first = ctx.cached_pipeline_count();
+    assert_eq!(count_after_first, 2);
+    let _ = ctx
+        .dispatch_vec_add(&a, &b)
+        .expect("Repeated vec_add dispatch failed");
+    assert_eq!(ctx.cached_pipeline_count(), count_after_first);
+
+    // 7. Unnormalized PGA motor on GPU must match CPU normalized rigid transform
+    let scaled_motor = PgaMotor {
+        s: motor.s * 3.5,
+        b23: motor.b23 * 3.5,
+        b31: motor.b31 * 3.5,
+        b12: motor.b12 * 3.5,
+        d01: motor.d01 * 3.5,
+        d02: motor.d02 * 3.5,
+        d03: motor.d03 * 3.5,
+        e0123: motor.e0123 * 3.5,
+    };
+    let scaled_gpu = ctx
+        .dispatch_pga_transform(&host_points[..16], &scaled_motor)
+        .expect("Scaled PGA motor GPU dispatch failed");
+    for (i, &gpu_pt) in scaled_gpu.iter().enumerate() {
+        let cpu_pt = scaled_motor
+            .transform_point(&PgaPoint::new(
+                host_points[i][0],
+                host_points[i][1],
+                host_points[i][2],
+            ))
+            .to_euclidean();
+        assert!((gpu_pt[0] - cpu_pt[0]).abs() < 1e-4);
+        assert!((gpu_pt[1] - cpu_pt[1]).abs() < 1e-4);
+        assert!((gpu_pt[2] - cpu_pt[2]).abs() < 1e-4);
+    }
+
+    // 8. Dimension mismatch validation must return Err cleanly without panicking
+    assert!(ctx.dispatch_vec_add(&a, &b[..10]).is_err());
+    assert!(ctx.dispatch_rmsnorm(&a, &b[..10], 1e-5).is_err());
+    assert!(ctx.dispatch_silu_mul(&a, &b[..10]).is_err());
+    let mut bad_rope = vec![0.0f32; 10];
+    assert!(ctx
+        .dispatch_rope(&mut bad_rope, 0, 2, 5, 10000.0, true)
+        .is_err());
 }

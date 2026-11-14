@@ -3,11 +3,11 @@
 // License: Apache-2.0
 // ============================================================================
 
-use std::ops::{Add, Mul, Neg, Sub};
+use super::line::PgaLine;
 use super::plane::PgaPlane;
 use super::point::PgaPoint;
-use super::line::PgaLine;
 use crate::versor::Quaternion;
+use std::ops::{Add, Mul, Neg, Sub};
 
 /// Motor in 3D Projective Geometric Algebra Cl*(3, 0, 1).
 /// Even multivector combining rotation and translation (SE(3) Lie group).
@@ -52,6 +52,7 @@ impl PgaMotor {
 
     /// Construct a motor from raw components.
     #[inline(always)]
+    #[allow(clippy::too_many_arguments)]
     pub const fn new(
         s: f32,
         b23: f32,
@@ -112,7 +113,11 @@ impl PgaMotor {
 
     /// Rigid body transformation combining rotation followed by translation: M = T * R.
     #[inline]
-    pub fn from_rotation_translation(axis: &[f32; 3], angle_rad: f32, translation: &[f32; 3]) -> Self {
+    pub fn from_rotation_translation(
+        axis: &[f32; 3],
+        angle_rad: f32,
+        translation: &[f32; 3],
+    ) -> Self {
         let r = Self::from_rotation(axis, angle_rad);
         let t = Self::from_translation(translation[0], translation[1], translation[2]);
         t.geometric_product(&r)
@@ -181,7 +186,8 @@ impl PgaMotor {
         let inv_r_sq = 1.0 / r_sq;
 
         // Ideal / dual normalization correction
-        let dot_dual = self.s * self.e0123 - self.b23 * self.d01 - self.b31 * self.d02 - self.b12 * self.d03;
+        let dot_dual =
+            self.s * self.e0123 - self.b23 * self.d01 - self.b31 * self.d02 - self.b12 * self.d03;
         let t = dot_dual * inv_r_sq;
 
         Self {
@@ -189,9 +195,9 @@ impl PgaMotor {
             b23: self.b23 * inv_r,
             b31: self.b31 * inv_r,
             b12: self.b12 * inv_r,
-            d01: (self.d01 - self.b23 * t) * inv_r,
-            d02: (self.d02 - self.b31 * t) * inv_r,
-            d03: (self.d03 - self.b12 * t) * inv_r,
+            d01: (self.d01 + self.b23 * t) * inv_r,
+            d02: (self.d02 + self.b31 * t) * inv_r,
+            d03: (self.d03 + self.b12 * t) * inv_r,
             e0123: (self.e0123 - self.s * t) * inv_r,
         }
     }
@@ -205,7 +211,11 @@ impl PgaMotor {
             return Self::identity();
         }
         let inv_r_sq = 1.0 / r_sq;
-        let dot_dual = 2.0 * (self.s * self.e0123 - self.b23 * self.d01 - self.b31 * self.d02 - self.b12 * self.d03);
+        let dot_dual = 2.0
+            * (self.s * self.e0123
+                - self.b23 * self.d01
+                - self.b31 * self.d02
+                - self.b12 * self.d03);
 
         Self {
             s: rev.s * inv_r_sq,
@@ -232,25 +242,29 @@ impl PgaMotor {
         let b12 = a.s * b.b12 + a.b12 * b.s - a.b23 * b.b31 + a.b31 * b.b23;
 
         // Grade 2 ideal & Grade 4 (Translator / Pseudoscalar part)
-        let e0123 = a.s * b.e0123 + a.e0123 * b.s
-            + a.b23 * b.d01 + a.d01 * b.b23
-            + a.b31 * b.d02 + a.d02 * b.b31
-            + a.b12 * b.d03 + a.d03 * b.b12;
+        let e0123 = a.s * b.e0123
+            + a.e0123 * b.s
+            + a.b23 * b.d01
+            + a.d01 * b.b23
+            + a.b31 * b.d02
+            + a.d02 * b.b31
+            + a.b12 * b.d03
+            + a.d03 * b.b12;
 
-        let d01 = a.s * b.d01 + a.d01 * b.s
-            - a.b23 * b.e0123 - a.e0123 * b.b23
-            + a.b12 * b.d02 - a.b31 * b.d03
-            - a.d02 * b.b12 + a.d03 * b.b31;
+        let d01 = a.s * b.d01 + a.d01 * b.s - a.b23 * b.e0123 - a.e0123 * b.b23 + a.b12 * b.d02
+            - a.b31 * b.d03
+            - a.d02 * b.b12
+            + a.d03 * b.b31;
 
-        let d02 = a.s * b.d02 + a.d02 * b.s
-            - a.b31 * b.e0123 - a.e0123 * b.b31
-            + a.b23 * b.d03 - a.b12 * b.d01
-            - a.d03 * b.b23 + a.d01 * b.b12;
+        let d02 = a.s * b.d02 + a.d02 * b.s - a.b31 * b.e0123 - a.e0123 * b.b31 + a.b23 * b.d03
+            - a.b12 * b.d01
+            - a.d03 * b.b23
+            + a.d01 * b.b12;
 
-        let d03 = a.s * b.d03 + a.d03 * b.s
-            - a.b12 * b.e0123 - a.e0123 * b.b12
-            + a.b31 * b.d01 - a.b23 * b.d02
-            - a.d01 * b.b31 + a.d02 * b.b23;
+        let d03 = a.s * b.d03 + a.d03 * b.s - a.b12 * b.e0123 - a.e0123 * b.b12 + a.b31 * b.d01
+            - a.b23 * b.d02
+            - a.d01 * b.b31
+            + a.d02 * b.b23;
 
         Self {
             s,
@@ -264,31 +278,41 @@ impl PgaMotor {
         }
     }
 
-    /// Transforms an affine point via sandwich product: p' = M * p * M~.
+    /// Transforms a homogeneous or affine point via sandwich product: p' = M * p * M~.
+    /// Normalizes the motor and preserves `p.w` so ideal points (`w = 0`) rotate without translating.
     #[inline]
     pub fn transform_point(&self, p: &PgaPoint) -> PgaPoint {
-        let [x, y, z] = p.to_euclidean();
+        let m = self.normalized();
+        let q_r = Quaternion::new(m.s, -m.b23, -m.b31, -m.b12);
+        let q_d = Quaternion::new(-m.e0123, -m.d01, -m.d02, -m.d03);
 
-        let q_r = Quaternion::new(self.s, -self.b23, -self.b31, -self.b12);
-        let q_d = Quaternion::new(-self.e0123, -self.d01, -self.d02, -self.d03);
-
-        let rot_p = q_r.rotate_vector3(&[x, y, z]);
+        let rot_p = q_r.rotate_vector3(&[p.x, p.y, p.z]);
         let t_quat = (q_d * q_r.conjugate()) * 2.0;
 
-        PgaPoint::new(rot_p[0] + t_quat.x, rot_p[1] + t_quat.y, rot_p[2] + t_quat.z)
+        PgaPoint::from_homogeneous(
+            rot_p[0] + p.w * t_quat.x,
+            rot_p[1] + p.w * t_quat.y,
+            rot_p[2] + p.w * t_quat.z,
+            p.w,
+        )
     }
 
     /// Transforms a plane via sandwich product: P' = M * P * M~.
     #[inline]
     pub fn transform_plane(&self, plane: &PgaPlane) -> PgaPlane {
+        let m = self.normalized();
         let norm_p = plane.normalized();
+        if norm_p.norm_sq() <= 1e-12 {
+            // Ideal plane d*e0 is invariant under proper rigid motions
+            return *plane;
+        }
         let [nx, ny, nz] = norm_p.normal();
 
         // Rotate normal using conjugate rotor
-        let qw = self.s;
-        let qx = -self.b23;
-        let qy = -self.b31;
-        let qz = -self.b12;
+        let qw = m.s;
+        let qx = -m.b23;
+        let qy = -m.b31;
+        let qz = -m.b12;
 
         let rx = 2.0 * (qy * nz - qz * ny);
         let ry = 2.0 * (qz * nx - qx * nz);
@@ -300,7 +324,7 @@ impl PgaMotor {
 
         // Distance updated by translation offset
         let p_pt = PgaPoint::new(-norm_p.d * nx, -norm_p.d * ny, -norm_p.d * nz);
-        let trans_pt = self.transform_point(&p_pt);
+        let trans_pt = m.transform_point(&p_pt);
         let [tx, ty, tz] = trans_pt.to_euclidean();
 
         let new_d = -(rot_nx * tx + rot_ny * ty + rot_nz * tz);
@@ -330,8 +354,12 @@ impl PgaMotor {
             return *target;
         }
 
-        // Relative motor: Delta = target * self^-1
-        let delta = target.geometric_product(&self.inverse()).normalized();
+        // Relative motor: Delta = target * self^-1; enforce shortest arc (delta.s >= 0,
+        // tolerating ~1e-7 cos(pi/2) float rounding at exact 180-degree boundary)
+        let mut delta = target.geometric_product(&self.inverse()).normalized();
+        if delta.s < -1e-6 {
+            delta = -delta;
+        }
 
         // Extract angle and rotation axis
         let half_ang = delta.s.clamp(-1.0, 1.0).acos();

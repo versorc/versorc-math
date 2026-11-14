@@ -4,9 +4,16 @@
 # ============================================================================
 
 from ._versorc_math import (
+    VersorBufferF32,
+    VersorBufferI32,
     Cl3,
     Cl2,
     PgaMotor,
+    PgaPoint,
+    PgaPlane,
+    PgaLine,
+    Quaternion,
+    DualQuaternion,
     CgaPoint,
     CgaSphere,
     CgaCircle,
@@ -16,18 +23,30 @@ from ._versorc_math import (
     DyadicWalshVersor,
     Clifford3BitTensor,
     PoincarePoint,
+    CayleyKleinSpace,
     get_e8_roots,
+    project_to_e8,
+    project_to_d8,
     get_lloyd_max_3bit_centroids,
     fwht,
 )
 
-from . import plotting
+try:
+    from ._versorc_math import GpuComputeContext
+except ImportError:
+    GpuComputeContext = None
+
 from . import ganja
 
 __all__ = [
     "Cl3",
     "Cl2",
     "PgaMotor",
+    "PgaPoint",
+    "PgaPlane",
+    "PgaLine",
+    "Quaternion",
+    "DualQuaternion",
     "CgaPoint",
     "CgaSphere",
     "CgaCircle",
@@ -37,11 +56,16 @@ __all__ = [
     "DyadicWalshVersor",
     "Clifford3BitTensor",
     "PoincarePoint",
+    "CayleyKleinSpace",
+    "VersorBufferF32",
+    "VersorBufferI32",
     "get_e8_roots",
+    "project_to_e8",
+    "project_to_d8",
     "get_lloyd_max_3bit_centroids",
     "fwht",
-    "plotting",
+    "GpuComputeContext",
     "ganja",
 ]
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"

@@ -33,9 +33,7 @@ impl Blade {
     #[inline(always)]
     pub const fn reverse_sign(self) -> i8 {
         let k = self.grade();
-        if k < 2 {
-            1
-        } else if (k * (k - 1) / 2) % 2 == 0 {
+        if k < 2 || (k * (k - 1) / 2).is_multiple_of(2) {
             1
         } else {
             -1
@@ -45,7 +43,7 @@ impl Blade {
     /// Grade involution sign of the blade: (-1)^k.
     #[inline(always)]
     pub const fn involution_sign(self) -> i8 {
-        if self.grade() % 2 == 0 {
+        if self.grade().is_multiple_of(2) {
             1
         } else {
             -1
@@ -56,7 +54,7 @@ impl Blade {
     #[inline(always)]
     pub const fn conjugation_sign(self) -> i8 {
         let k = self.grade();
-        if (k * (k + 1) / 2) % 2 == 0 {
+        if (k * (k + 1) / 2).is_multiple_of(2) {
             1
         } else {
             -1
@@ -83,7 +81,7 @@ impl Blade {
             temp_b &= temp_b - 1; // Clear lowest set bit
         }
 
-        let mut sign: i8 = if swaps % 2 == 0 { 1 } else { -1 };
+        let mut sign: i8 = if swaps.is_multiple_of(2) { 1 } else { -1 };
 
         // 2. Evaluate metric contraction for common generators: e_k * e_k = eta_kk
         let common = mask_a & mask_b;
@@ -121,7 +119,7 @@ impl Blade {
             temp_b &= temp_b - 1;
         }
 
-        let sign: i8 = if swaps % 2 == 0 { 1 } else { -1 };
+        let sign: i8 = if swaps.is_multiple_of(2) { 1 } else { -1 };
         Some((Self(self.0 | rhs.0), sign))
     }
 

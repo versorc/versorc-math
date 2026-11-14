@@ -74,7 +74,11 @@ impl CayleyKleinSpace {
     /// - tau > 0 (Elliptic / Spherical):
     ///   d_tau(x, y) = (1 / sqrt(tau)) * arccos(1 - (2 tau ||x - y||^2) / ((1 + tau ||x||^2)(1 + tau ||y||^2)))
     pub fn geodesic_distance(&self, x: &[f32], y: &[f32]) -> f32 {
-        assert_eq!(x.len(), y.len(), "Dimension mismatch in Cayley-Klein distance");
+        assert_eq!(
+            x.len(),
+            y.len(),
+            "Dimension mismatch in Cayley-Klein distance"
+        );
         let mut diff_sq = 0.0f32;
         let mut x_sq = 0.0f32;
         let mut y_sq = 0.0f32;
@@ -123,7 +127,11 @@ impl CayleyKleinSpace {
     /// Computes the generalized Möbius Gyrovector Addition u (+)_\tau v:
     /// u \oplus_\tau v = \frac{(1 - 2\tau\langle u,v\rangle - \tau\|v\|^2)u + (1 + \tau\|u\|^2)v}{1 - 2\tau\langle u,v\rangle + \tau^2\|u\|^2\|v\|^2}
     pub fn mobius_add(&self, u: &[f32], v: &[f32]) -> Vec<f32> {
-        assert_eq!(u.len(), v.len(), "Dimension mismatch in Cayley-Klein Mobius addition");
+        assert_eq!(
+            u.len(),
+            v.len(),
+            "Dimension mismatch in Cayley-Klein Mobius addition"
+        );
         let n = u.len();
 
         let mut uv_dot = 0.0f32;

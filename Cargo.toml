@@ -2,7 +2,8 @@
 name = "versorc-math"
 version = "0.1.1"
 edition = "2021"
-authors = ["The VersorC Project Contributors"]
+rust-version = "1.87"
+authors = ["The VersorC Project Contributors <zeph.systems@proton.me>"]
 description = "Low-level Clifford Geometric Algebra, Versor Operators, and High-Dimensional Matrix Reductions"
 license = "Apache-2.0"
 readme = "README.md"
@@ -14,7 +15,6 @@ categories = ["mathematics", "science"]
 exclude = [
     "literature/*",
     "assets/*",
-    "examples/plots/*",
     "vendor_reference/*",
     "explanations/*",
     "*.djvu",
@@ -30,13 +30,11 @@ serde = { version = "1.0", default-features = false, features = ["alloc", "deriv
 ash = { version = "0.38", default-features = false, features = ["loaded", "std"], optional = true }
 bytemuck = { version = "1.18", features = ["derive"], optional = true }
 pyo3 = { version = "0.26", features = ["extension-module"], optional = true }
-numpy = { version = "0.26", optional = true }
 
 [dev-dependencies]
 
 [features]
-default = ["std"]
-std = []
+default = []
 serde = ["dep:serde"]
-vulkan = ["dep:ash", "dep:bytemuck", "std"]
-python = ["dep:pyo3", "dep:numpy", "std"]
+vulkan = ["dep:ash", "dep:bytemuck"]
+python = ["dep:pyo3"]

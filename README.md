@@ -24,27 +24,24 @@
 [![PyPI](https://img.shields.io/pypi/v/versorc-math.svg?color=blue&label=pypi)](https://pypi.org/project/versorc-math/)
 [![Python](https://img.shields.io/pypi/pyversions/versorc-math.svg?color=blue&label=python)](https://pypi.org/project/versorc-math/)
 [![Documentation](https://img.shields.io/docsrs/versorc-math.svg?color=green&label=docs.rs)](https://docs.rs/versorc-math)
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24153328.svg)](https://doi.org/10.5281/zenodo.24153328)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24153329.svg)](https://doi.org/10.5281/zenodo.24153329)
 [![Release](https://img.shields.io/github/v/release/versorc/versorc-math?color=brightgreen&label=release)](https://github.com/versorc/versorc-math/releases)
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/versorc/versorc-math/pulls)
-[![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg)](CODE_OF_CONDUCT.md)
-[![Community](https://img.shields.io/badge/Community-Open_Source-purple.svg)](https://github.com/versorc/versorc-math)
 
-**VERSORC-MATH** is an open-source, community-driven **Clifford Geometric Algebra (GA)**, **Versor Operator**, and **Geometric Quantization** engine written in pure Rust with zero required runtime dependencies. It provides high-performance native **PyO3 / NumPy** bindings, hardware **Vulkan compute shaders**, and scientific visualization suites.
+**VERSORC-MATH** is a low-level **Clifford Geometric Algebra (GA)**, **Versor Operator**, and **Geometric Quantization** engine written in pure Rust with zero required runtime dependencies. It provides **PyO3** native Python bindings with zero-copy PEP 3118 buffer interoperability (compatible with external libraries such as `numpy` without bundling them) and optional hardware **Vulkan compute shaders**.
 
-The project is released under the **Apache License 2.0** to foster an open, collaborative ecosystem. Whether you are building robotics kinematics, computer graphics pipelines, quantum physics simulations, or high-throughput machine learning quantization kernels, anyone is invited to **fork, experiment, submit pull requests, and contribute**.
+Released under the **Apache License 2.0**.
 
 ---
 
 ## Table of Contents
 1. [Taxonomy of Clifford Geometric Algebra Operators](#taxonomy-of-clifford-geometric-algebra-operators)
 2. [Canonical Literature & Theoretical Foundations](#canonical-literature--theoretical-foundations)
-3. [Scientific Visual Gallery & Simulations](#scientific-visual-gallery--simulations)
+3. [Algebraic & Geometric Capabilities](#algebraic--geometric-capabilities)
 4. [Mathematical Foundations & Signatures](#mathematical-foundations--signatures)
-5. [Quickstart Guides (Rust & Python / NumPy)](#quickstart-guides)
+5. [Quickstart Guides](#quickstart-guides)
 6. [Hardware & Microarchitectural Benchmarks](#hardware--microarchitectural-benchmarks)
 7. [Vulkan Compute Shaders](#vulkan-compute-shaders)
-8. [Community, Contributing & Forking](#community-contributing--forking)
+8. [Contact](#contact)
 9. [Citation](#citation)
 10. [License](#license)
 
@@ -54,7 +51,7 @@ The project is released under the **Apache License 2.0** to foster an open, coll
 
 `versorc-math` provides a complete, unified hierarchy of geometric operations across vector spaces and multivector grades:
 
-| Operator Name | Canonical Symbol | Rust API | Python / NumPy API | Grade Shift ($\Delta\text{grade}$) | Mathematical Definition |
+| Operator Name | Canonical Symbol | Rust API | Python API | Grade Shift ($\Delta\text{grade}$) | Mathematical Definition |
 | :--- | :---: | :--- | :--- | :---: | :--- |
 | **Geometric Product** | $A B$ | `a * b`, `a.geometric_product(&b)` | `a * b` | Mixed ($\sum \langle AB \rangle_k$) | $AB = A \cdot B + A \wedge B$ (vectors) |
 | **Outer / Wedge Product** | $A \wedge B$ | `a.wedge(&b)` | `a ^ b` | Grade addition ($r + s$) | Multivector exterior product, anticommutative on 1-blades |
@@ -94,35 +91,24 @@ Every algorithm and operator in `versorc-math` is strictly grounded in establish
 
 ---
 
-## Scientific Visual Gallery & Simulations
-
-All visual representations below are produced directly by the engine via `python3 generate_visual_plots.py`:
+## Algebraic & Geometric Capabilities
 
 ### 1. 3D Projective Geometric Algebra $\mathcal{Cl}^*(3,0,1)$: SE(3) Rigid Kinematics & Chasles Screw Axis
 Rigid body transformation combining rotation and translation into a single even multivector (motor $M = T R \in \text{Spin}(3,0,1)$). According to **Chasles' Theorem**, any spatial rigid displacement is an invariant screw motion around a unique line $L$ in space with pitch $p$. Geodesic motion is computed via continuous screw linear interpolation ($\text{ScLERP}$): $M(t) = \exp(t \log M)$.
 
-<p align="center">
-  <img src="examples/plots/01_pga_3d_screw_kinematics.png" alt="3D PGA Screw Kinematics" width="85%">
-</p>
-
 ```python
-import numpy as np
+import math
 from versorc_math import PgaMotor
 
 # Motor: 180° rotation around Z with translation (2, 1, 2)
-motor = PgaMotor(translation=[2.0, 1.0, 2.0], rotation_axis=[0.0, 0.0, 1.0], angle_rad=np.pi)
+motor = PgaMotor(translation=[2.0, 1.0, 2.0], rotation_axis=[0.0, 0.0, 1.0], angle_rad=math.pi)
 pt_axis, dir_axis, angle, pitch = motor.screw_parameters()
-# Evaluates invariant screw axis at p0 = (1.0, 0.5, 0.0) with pitch = 0.64
 ```
 
 ---
 
 ### 2. 3D Conformal Geometric Algebra $\mathcal{Cl}(4,1)$: Spherical Inversion & Circle Meet
-In 3D CGA, spheres and planes are grade-1 vectors. Conformal reflection across a sphere of radius $R$ is realized through a 1-versor sandwich product $P' = S P S^{-1}$, performing the classical non-Euclidean spherical inversion $\|\mathbf{p}'\| = R^2 / \|\mathbf{p}\|$. The intersection of a sphere $S$ and a plane $\Pi$ yields an oriented 3-blade circle $C^* = S^* \wedge \Pi^*$.
-
-<p align="center">
-  <img src="examples/plots/02_cga_3d_conformal_spheres_and_inversion.png" alt="3D CGA Conformal Spheres and Inversion" width="85%">
-</p>
+In 3D CGA, spheres and planes are grade-1 vectors. Conformal reflection across a sphere of radius $R$ is realized through a 1-versor sandwich product $P' = S P S^{-1}$, performing classical spherical inversion $\|\mathbf{p}'\| = R^2 / \|\mathbf{p}\|$. The intersection of a sphere $S$ and a plane $\Pi$ yields an oriented 3-blade circle $C^* = S^* \wedge \Pi^*$.
 
 ```python
 from versorc_math import CgaPoint, CgaSphere, CgaCircle
@@ -141,10 +127,6 @@ print(f"Circle Radius: {circle.radius:.3f}, Area: {circle.area:.2f}")
 ### 3. 3D Euclidean Space $\mathcal{Cl}(3,0)$: 2-Blade Bivectors & Rotor Sandwich Orbits
 Vectors $u, v$ span an oriented 2-blade bivector $B = u \wedge v$. Its dual $B I^{-1} = *(u \wedge v)$ corresponds to the orthogonal normal vector. Rotations are generated by rotors $R(\theta) = \exp(-B \theta / 2) = \cos(\theta/2) - B_{\text{unit}} \sin(\theta/2)$ via the bilateral sandwich product $v(\theta) = R(\theta) v_0 R^\sim(\theta)$.
 
-<p align="center">
-  <img src="examples/plots/03_cl3_2blade_bivector_and_rotor_orbit.png" alt="3D Cl(3,0) 2-Blade Bivector and Rotor Orbit" width="85%">
-</p>
-
 ```python
 from versorc_math import Cl3
 
@@ -156,48 +138,33 @@ hodge_dual = bivector.dual()       # Vector orthogonal to plane (+3.24 e3)
 
 ---
 
-### 4. Gosset $E_8$ Root Lattice: 240 Minimal Roots on the Exact Coxeter Plane
-The unique even unimodular lattice in 8 dimensions $E_8 = D_8 \cup (D_8 + \frac{1}{2}\mathbf{1})$ contains exactly 240 minimal root versors with norm squared $\|r\|^2 = 2.0$. Projecting onto the 2D Coxeter plane eigenspace of the Bourbaki Coxeter element $C = \prod_{i=1}^8 s_i$ (eigenvalue $\lambda = \exp(\pm 2\pi i / 30)$) reveals the canonical **8 concentric rings of 30 vertices** with exact 30-fold dihedral symmetry $D_{30}$.
-
-<p align="center">
-  <img src="examples/plots/04_e8_gosset_lattice_coxeter_plane.png" alt="Gosset E8 Lattice Coxeter Plane" width="85%">
-</p>
+### 4. Gosset $E_8$ Root Lattice
+The unique even unimodular lattice in 8 dimensions $E_8 = D_8 \cup (D_8 + \frac{1}{2}\mathbf{1})$ contains 240 minimal root versors with squared norm $\|r\|^2 = 2.0$, together with linear-time Conway-Sloane closest-vector projection.
 
 ```python
 from versorc_math import get_e8_roots
-from versorc_math.plotting import plot_e8_coxeter_plane
 
-roots = get_e8_roots()  # Shape: (240, 8) in float32
-fig = plot_e8_coxeter_plane(save_path="e8_coxeter.png")
+roots = get_e8_roots()  # VersorBufferF32 with shape (240, 8), PEP 3118 compatible
 ```
 
 ---
 
 ### 5. TurboQuant: Dyadic Versor Outlier Smearing & 3-Bit Lloyd-Max Quantization
-Extreme activation and weight outlier channels (kurtosis $> 30$) degrade low-bit quantization in Transformer architectures. By applying a randomized Dyadic Walsh-Hadamard Versor isometry $R(W) = W H_D$, the distribution is smoothed into an isotropic Gaussian $\mathcal{N}(0, \sigma^2)$ via the Central Limit Theorem. Outliers are bounded, and weights are quantized using the 8 optimal symmetric Lloyd-Max centroids.
-
-<p align="center">
-  <img src="examples/plots/05_clifford_3bit_turboquant_isotropy.png" alt="TurboQuant Dyadic Versor Isotropy and Lloyd-Max" width="100%">
-</p>
+By applying a randomized Dyadic Walsh-Hadamard Versor isometry $R(W) = W H_D$, extreme outlier channels are smeared into an approximately Gaussian distribution bounded for quantization using symmetric Lloyd-Max centroids.
 
 ```python
-import numpy as np
 from versorc_math import DyadicWalshVersor, get_lloyd_max_3bit_centroids
 
 # Isotropic Walsh-Hadamard rotation in O(N log N) additions
-versor = DyadicWalshVersor(dim=4096, seed=12345)
-w_rotated = versor.apply(raw_weights)
+versor = DyadicWalshVersor(dim=64, seed=12345)
+w_rotated = versor.apply([float(i) for i in range(64)])
 centroids = get_lloyd_max_3bit_centroids()  # 8 optimal N(0,1) levels
 ```
 
 ---
 
-### 6. Conformal Hyperbolic Geometry: Poincaré Disk $\mathbb{D}^2$ (Curvature $c = -1$)
-In the conformal Poincaré disk model $\mathbb{D}^2$, hyperbolic points reside strictly within $\|z\| < 1$. Geodesics are exact circular arcs orthogonal to the ideal boundary $S^1$. VersorC-Math computes exact geodesic arcs via projective correspondence with the Beltrami-Klein model $\mathbb{K}^2$, non-associative Möbius gyrovector additions $u \oplus v$, and closed-form $O(K)$ Einstein hyperbolic midpoints $\mu_E$.
-
-<p align="center">
-  <img src="examples/plots/06_poincare_hyperbolic_disk.png" alt="Poincaré Hyperbolic Disk" width="85%">
-</p>
+### 6. Conformal Hyperbolic Geometry: Poincaré Ball $\mathbb{B}^d$ (Curvature $c = -1$)
+In the conformal Poincaré ball model $\mathbb{B}^d$, hyperbolic points reside strictly within $\|z\| < 1$. VersorC-Math computes exact geodesic arcs via projective correspondence with the Beltrami-Klein model $\mathbb{K}^d$, non-associative Möbius gyrovector additions $u \oplus v$, and closed-form $O(K)$ Einstein hyperbolic midpoints $\mu_E$.
 
 ```python
 from versorc_math import PoincarePoint
@@ -242,10 +209,10 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-versorc-math = "0.1.0"
+versorc-math = "0.1.1"
 
 # Optional features:
-# versorc-math = { version = "0.1.0", features = ["vulkan", "python"] }
+# versorc-math = { version = "0.1.1", features = ["vulkan", "python"] }
 ```
 
 Basic Rust example:
@@ -269,25 +236,18 @@ fn main() {
 }
 ```
 
-### 2. Python / NumPy Integration
+### 2. Python Integration (Zero Forced Dependencies)
 
-Install via pip:
-
-```bash
-pip install versorc-math
-```
-
-Or build from source with Maturin:
+Build from source with Maturin:
 
 ```bash
 maturin develop --release --features python
 ```
 
-Interactive Python example:
+Pure Python example (no external runtime dependencies required; PEP 3118 compatible with `numpy.asarray(...)`):
 
 ```python
-import numpy as np
-from versorc_math import Cl3, PgaMotor, CgaPoint, CgaSphere, StaSpinor, PoincarePoint
+from versorc_math import Cl3, StaSpinor
 
 # 3D Euclidean Cl(3, 0)
 e1, e2, e3 = Cl3.e1(), Cl3.e2(), Cl3.e3()
@@ -315,29 +275,29 @@ Because $\mathbf{H}_D \mathbf{H}_D^T = \mathbf{I}$, inner products are strictly 
 
 ### Silicon Benchmark (1408 × 2048 Expert Projection Layer)
 
-Evaluated on x86_64 AVX2 host:
+Single-threaded `--release` evaluation on `x86_64` AVX2 (`AMD Ryzen 7 170`, 50-iteration mean latency per 2,883,584-weight MoE projection):
 
-| Representation | Precision | Footprint | Throughput | Speedup | Cosine vs FP32 |
-| :--- | :---: | :---: | :---: | :---: | :---: |
-| **Dense FP32** | 32-bit | 11.00 MB | 28.4 GFLOPS | 1.00× (baseline) | 1.00000 |
-| **VrcAsym64 (v5)** | 4.50 bpw | 1.55 MB | 54.1 GFLOPS | 1.90× | 0.99929 |
-| **Clifford 3-Bit (Scalar)** | 4.00 bpw | 1.38 MB | 12.2 GFLOPS | 0.43× (ALU bound) | 0.99620 |
-| **Clifford 3-Bit (AVX2 `vpermps`)** | 4.00 bpw | 1.38 MB | **198.6 GFLOPS** | **7.00×** | **0.99620** |
+| Representation | Precision | Footprint | Latency | Throughput | Speedup vs FP32 | Cosine vs FP32 |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Dense FP32** | 32-bit | 11.00 MiB | 2735.6 µs | 2.11 GFLOPS | 1.00× (baseline) | 1.00000 |
+| **VrcAsym64** | 4.50 bpw | 1.55 MiB | 2137.9 µs | 2.70 GFLOPS | 1.28× | 0.99929 |
+| **Clifford 3-Bit (Scalar)** | 4.00 bpw | 1.38 MiB | 10980.5 µs | 0.53 GFLOPS | 0.25× (ALU bound) | 0.99620 |
+| **Clifford 3-Bit (AVX2 `vpermps`)** | 4.00 bpw | 1.38 MiB | **418.2 µs** | **13.79 GFLOPS** | **6.54×** (`26.26×` vs Scalar) | **0.99620** |
 
-Run benchmarks locally:
+Run benchmarks locally in release mode:
 ```bash
-cargo test --test test_risk_audit_silicon -- --nocapture
-cargo test --test test_quantization_static_benchmark -- --nocapture
+cargo test --release --test test_risk_audit_silicon -- --nocapture
+cargo test --release --test test_quantization_static_benchmark -- --nocapture
 ```
 
 ---
 
 ## Vulkan Compute Shaders
 
-`versorc-math` embeds precompiled SPIR-V 1.3+ compute shaders via `include_bytes!`:
+`versorc-math` embeds precompiled SPIR-V compute shaders via `include_bytes!`:
 - `pga_transform.spv`: Rigid tensor point transformation $p' = M p M^\sim$ on arbitrary batches in GPU VRAM.
 - `cga_transform.spv`: Conformal transformations (spherical inversions, dilations, translations).
-- `hot_stratum_e8.spv`: Gosset lattice $E_8$ projection with Wave32/Wave64 subgroup optimizations.
+- `ga_cl3_batch.spv`, `poincare_mobius_batch.spv`: Batched $\mathcal{Cl}(3,0)$ geometric product and Poincaré ball Möbius additions.
 - `rope.spv`, `silu_mul.spv`, `rmsnorm.spv`, `vec_add.spv`: High-performance Transformer building blocks.
 
 Verify Vulkan integration on your GPU:
@@ -347,32 +307,9 @@ cargo test --features vulkan --test test_vulkan_compute -- --nocapture
 
 ---
 
-## Community, Contributing & Forking
+## Contact
 
-`versorc-math` is an open-source initiative built by and for the global scientific and engineering community. We welcome contributions from researchers, mathematicians, engineers, educators, and students of all backgrounds!
-
-* **Contributing Guide**: Check out [CONTRIBUTING.md](CONTRIBUTING.md) for full setup instructions, development workflow, and testing guides.
-* **Code of Conduct**: We are committed to fostering a welcoming, harassment-free environment for everyone. Please review our [Code of Conduct](CODE_OF_CONDUCT.md).
-* **Good First Issues**: Whether fixing a typo in theoretical proofs, adding a test case, or optimizing a kernel, all pull requests are valued and reviewed with care.
-
-### How You Can Contribute:
-- **New Geometric Algebras**: Implement $\mathcal{Cl}(0, 2)$, Conformal 2D, or Compass Geometric Algebra signatures.
-- **Hardware SIMD Kernels**: Contribute ARM NEON, AVX-512, or WebAssembly SIMD128 implementations.
-- **Python / Framework Integrations**: Build PyTorch, JAX, or Taichi bindings for Clifford tensor operations.
-- **Documentation & Educational Visualizations**: Enhance derivations, Jupyter notebooks, or GanJa.js interactive scenes.
-
-### Contribution Workflow:
-1. **Fork the Repository**: Click "Fork" on [GitHub](https://github.com/versorc/versorc-math).
-2. **Create a Feature Branch**:
-   ```bash
-   git checkout -b feature/my-geometric-feature
-   ```
-3. **Ensure All Tests Pass**:
-   ```bash
-   cargo test --all-features
-   pytest python/tests/test_ga_numpy.py -v
-   ```
-4. **Submit a Pull Request**: Open a PR describing your mathematical rationale and test coverage. Our maintainers will gladly assist with reviews!
+Project maintainer contact: `zeph.systems@proton.me`
 
 ---
 
@@ -386,7 +323,7 @@ If you utilize `versorc-math` in your research, academic publications, or open-s
   title        = {versorc-math: High-Performance Clifford Geometric Algebra and Versor Quantization Engine},
   year         = 2026,
   publisher    = {Zenodo},
-  version      = {0.1.0},
+  version      = {0.1.1},
   doi          = {10.5281/zenodo.24153329},
   url          = {https://github.com/versorc/versorc-math}
 }

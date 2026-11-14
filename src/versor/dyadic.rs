@@ -10,9 +10,9 @@
 // R^T * R = I
 // ============================================================================
 
+use super::VersorAction;
 #[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::*;
-use super::VersorAction;
 
 /// Dyadic Walsh-Hadamard Versor with Rademacher sign scrambling.
 #[derive(Debug, Clone)]
@@ -32,12 +32,16 @@ impl DyadicWalshVersor {
         } else {
             let mut b = 256;
             while b >= 64 {
-                if dim % b == 0 {
+                if dim.is_multiple_of(b) {
                     break;
                 }
                 b /= 2;
             }
-            assert!(b >= 64 && dim % b == 0, "Dimension {} must be divisible by at least 64", dim);
+            assert!(
+                b >= 64 && dim.is_multiple_of(b),
+                "Dimension {} must be divisible by at least 64",
+                dim
+            );
             b
         };
 
@@ -101,6 +105,10 @@ impl DyadicWalshVersor {
     }
 
     /// AVX2-accelerated in-place FWHT.
+    ///
+    /// # Safety
+    /// Caller must ensure the host CPU supports AVX2 instructions (`is_x86_feature_detected!("avx2")`)
+    /// and that `data.len()` is a power of 2.
     #[cfg(target_arch = "x86_64")]
     #[target_feature(enable = "avx2")]
     pub unsafe fn fwht_avx2(data: &mut [f32]) {

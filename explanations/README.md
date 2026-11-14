@@ -68,5 +68,5 @@ explanations/
 │       ├── mod.rs
 │       └── cartan_dieudonne.rs # Orthogonal matrix factorizer into 1-versores
 ├── shaders/               # Precompiled SPIR-V 1.3+ Vulkan compute kernels
-└── tests/                 # Integration test battery (58 ground-truth test suites)
+└── tests/                 # Integration test battery (23 ground-truth test suites)
 ```

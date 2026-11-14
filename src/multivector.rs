@@ -3,8 +3,8 @@
 // License: Apache-2.0
 // ============================================================================
 
-use std::ops::{Add, AddAssign, Mul, Neg, Sub, SubAssign};
 use crate::blade::Blade;
+use std::ops::{Add, AddAssign, Mul, Neg, Sub, SubAssign};
 
 /// Fixed-size stack-allocated Multivector in Clifford Algebra Cl(p, q, r).
 /// - P, Q, R: Metric signature.
@@ -24,10 +24,24 @@ impl<const P: usize, const Q: usize, const R: usize, const N: usize> Default
 }
 
 impl<const P: usize, const Q: usize, const R: usize, const N: usize> Multivector<P, Q, R, N> {
+    const CHECK_DIM: () = {
+        assert!(
+            P + Q + R < usize::BITS as usize,
+            "Algebra dimension exceeds pointer width"
+        );
+        assert!(
+            N == (1usize << (P + Q + R)),
+            "Multivector N must equal 2^(P + Q + R)"
+        );
+    };
+
     /// Zero multivector.
     #[inline(always)]
     pub const fn zero() -> Self {
-        Self { coords: [0.0f32; N] }
+        let () = Self::CHECK_DIM;
+        Self {
+            coords: [0.0f32; N],
+        }
     }
 
     /// Scalar multivector: alpha * 1.
@@ -210,10 +224,29 @@ impl<const P: usize, const Q: usize, const R: usize, const N: usize> Multivector
         self.scalar_product(self)
     }
 
-    /// Magnitude / L2 norm.
+    /// Algebraic magnitude: sqrt(max(0, <A A~>_0)).
     #[inline]
     pub fn norm(&self) -> f32 {
         self.norm_sq().max(0.0).sqrt()
+    }
+
+    /// Squared Euclidean coefficient norm: sum_i coords[i]^2.
+    /// Unlike `norm_sq()`, this is positive-definite even in mixed or degenerate metrics.
+    #[inline]
+    pub fn euclidean_norm_sq(&self) -> f32 {
+        self.coords.iter().map(|&c| c * c).sum()
+    }
+
+    /// Euclidean L2 coefficient norm: sqrt(sum_i coords[i]^2).
+    #[inline]
+    pub fn euclidean_norm(&self) -> f32 {
+        self.euclidean_norm_sq().sqrt()
+    }
+
+    /// Returns true if all coordinates are exact zero.
+    #[inline]
+    pub fn is_zero(&self) -> bool {
+        self.coords.iter().all(|&c| c == 0.0)
     }
 
     /// Normalized multivector: A / ||A||.
@@ -249,7 +282,7 @@ impl<const P: usize, const Q: usize, const R: usize, const N: usize> Multivector
             return None; // Degenerate metric has I^2 == 0
         }
         let n = P + Q;
-        let sign_power = (n * (n - 1) / 2 + Q) % 2;
+        let sign_power = (n * n.saturating_sub(1) / 2 + Q) % 2;
         let sign = if sign_power == 0 { 1.0f32 } else { -1.0f32 };
         let mut mv = Self::zero();
         mv.coords[N - 1] = sign;
@@ -300,15 +333,16 @@ impl<const P: usize, const Q: usize, const R: usize, const N: usize> Multivector
         let mut res = Self::zero();
         for r in 1..=dim {
             let a_r = self.grade_projection(r);
-            if a_r.norm_sq() == 0.0 {
+            // Must test coordinate emptiness, not algebraic norm_sq(), so null blades (e.g. CGA n_o, n_inf) are not skipped.
+            if a_r.is_zero() {
                 continue;
             }
             for s in 1..=dim {
                 let b_s = rhs.grade_projection(s);
-                if b_s.norm_sq() == 0.0 {
+                if b_s.is_zero() {
                     continue;
                 }
-                let target_grade = if r >= s { r - s } else { s - r };
+                let target_grade = r.abs_diff(s);
                 let prod = a_r.geometric_product(&b_s);
                 res += prod.grade_projection(target_grade);
             }
@@ -319,10 +353,12 @@ impl<const P: usize, const Q: usize, const R: usize, const N: usize> Multivector
     /// Computes the exact closed-form algebraic inverse A^{-1} for multivectors:
     /// - For Cl(2, 0, 0): A^{-1} = \bar{A} / (A \bar{A})_0
     /// - For Cl(3, 0, 0): A^{-1} = \bar{A} (A \bar{A})~ / det(A)
-    /// - General fallback for versors: A~ / ||A||^2
+    /// - General fallback for versors: A~ / <A A~>_0 verified across all coordinates
+    ///
     /// Returns None if multivector is singular (det(A) == 0).
     #[inline]
     pub fn inverse(&self) -> Option<Self> {
+        let () = Self::CHECK_DIM;
         if N == 4 && P == 2 && Q == 0 && R == 0 {
             // Cl(2) exact inverse
             let conj = self.conjugation();
@@ -350,8 +386,9 @@ impl<const P: usize, const Q: usize, const R: usize, const N: usize> Multivector
             let norm_sq = self.norm_sq();
             if norm_sq.abs() > 1e-12 {
                 let candidate = rev * (1.0 / norm_sq);
-                let test = *self * candidate;
-                if (test.scalar() - 1.0).abs() < 1e-4 && (test - Self::from_scalar(1.0)).norm() < 1e-4 {
+                let residual = (*self * candidate) - Self::from_scalar(1.0);
+                // Check Euclidean L2 residual so null/degenerate residuals are never masked.
+                if residual.euclidean_norm() < 1e-4 {
                     return Some(candidate);
                 }
             }
@@ -361,61 +398,81 @@ impl<const P: usize, const Q: usize, const R: usize, const N: usize> Multivector
 }
 
 // Operator overloads
-impl<const P: usize, const Q: usize, const R: usize, const N: usize> Add for Multivector<P, Q, R, N> {
+impl<const P: usize, const Q: usize, const R: usize, const N: usize> Add
+    for Multivector<P, Q, R, N>
+{
     type Output = Self;
     #[inline]
     fn add(self, rhs: Self) -> Self {
         let mut coords = [0.0f32; N];
-        for i in 0..N {
-            coords[i] = self.coords[i] + rhs.coords[i];
+        for ((dst, &a), &b) in coords
+            .iter_mut()
+            .zip(self.coords.iter())
+            .zip(rhs.coords.iter())
+        {
+            *dst = a + b;
         }
         Self { coords }
     }
 }
 
-impl<const P: usize, const Q: usize, const R: usize, const N: usize> AddAssign for Multivector<P, Q, R, N> {
+impl<const P: usize, const Q: usize, const R: usize, const N: usize> AddAssign
+    for Multivector<P, Q, R, N>
+{
     #[inline]
     fn add_assign(&mut self, rhs: Self) {
-        for i in 0..N {
-            self.coords[i] += rhs.coords[i];
+        for (dst, &b) in self.coords.iter_mut().zip(rhs.coords.iter()) {
+            *dst += b;
         }
     }
 }
 
-impl<const P: usize, const Q: usize, const R: usize, const N: usize> Sub for Multivector<P, Q, R, N> {
+impl<const P: usize, const Q: usize, const R: usize, const N: usize> Sub
+    for Multivector<P, Q, R, N>
+{
     type Output = Self;
     #[inline]
     fn sub(self, rhs: Self) -> Self {
         let mut coords = [0.0f32; N];
-        for i in 0..N {
-            coords[i] = self.coords[i] - rhs.coords[i];
+        for ((dst, &a), &b) in coords
+            .iter_mut()
+            .zip(self.coords.iter())
+            .zip(rhs.coords.iter())
+        {
+            *dst = a - b;
         }
         Self { coords }
     }
 }
 
-impl<const P: usize, const Q: usize, const R: usize, const N: usize> SubAssign for Multivector<P, Q, R, N> {
+impl<const P: usize, const Q: usize, const R: usize, const N: usize> SubAssign
+    for Multivector<P, Q, R, N>
+{
     #[inline]
     fn sub_assign(&mut self, rhs: Self) {
-        for i in 0..N {
-            self.coords[i] -= rhs.coords[i];
+        for (dst, &b) in self.coords.iter_mut().zip(rhs.coords.iter()) {
+            *dst -= b;
         }
     }
 }
 
-impl<const P: usize, const Q: usize, const R: usize, const N: usize> Mul<f32> for Multivector<P, Q, R, N> {
+impl<const P: usize, const Q: usize, const R: usize, const N: usize> Mul<f32>
+    for Multivector<P, Q, R, N>
+{
     type Output = Self;
     #[inline]
     fn mul(self, scalar: f32) -> Self {
         let mut coords = [0.0f32; N];
-        for i in 0..N {
-            coords[i] = self.coords[i] * scalar;
+        for (dst, &a) in coords.iter_mut().zip(self.coords.iter()) {
+            *dst = a * scalar;
         }
         Self { coords }
     }
 }
 
-impl<const P: usize, const Q: usize, const R: usize, const N: usize> Mul for Multivector<P, Q, R, N> {
+impl<const P: usize, const Q: usize, const R: usize, const N: usize> Mul
+    for Multivector<P, Q, R, N>
+{
     type Output = Self;
     #[inline]
     fn mul(self, rhs: Self) -> Self {
@@ -423,13 +480,15 @@ impl<const P: usize, const Q: usize, const R: usize, const N: usize> Mul for Mul
     }
 }
 
-impl<const P: usize, const Q: usize, const R: usize, const N: usize> Neg for Multivector<P, Q, R, N> {
+impl<const P: usize, const Q: usize, const R: usize, const N: usize> Neg
+    for Multivector<P, Q, R, N>
+{
     type Output = Self;
     #[inline]
     fn neg(self) -> Self {
         let mut coords = [0.0f32; N];
-        for i in 0..N {
-            coords[i] = -self.coords[i];
+        for (dst, &a) in coords.iter_mut().zip(self.coords.iter()) {
+            *dst = -a;
         }
         Self { coords }
     }

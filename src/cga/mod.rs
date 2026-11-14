@@ -3,6 +3,7 @@
 // License: Apache-2.0
 // ============================================================================
 
+use crate::multivector::Multivector;
 use std::ops::{Add, Div, Mul, Neg, Sub};
 
 /// 5D Conformal Null-Basis Vector in Cl(4, 1).
@@ -10,16 +11,17 @@ use std::ops::{Add, Div, Mul, Neg, Sub};
 /// Metric properties:
 /// - no^2 = 0, ni^2 = 0
 /// - no . ni = -1
+///
 /// Alignment: 32 bytes (8 floats: x, y, z, no, ni, plus 3 padding floats).
 #[repr(C, align(32))]
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "vulkan", derive(bytemuck::Pod, bytemuck::Zeroable))]
 pub struct CgaVector5D {
-    pub x: f32,     // e1: Euclidean x
-    pub y: f32,     // e2: Euclidean y
-    pub z: f32,     // e3: Euclidean z
-    pub no: f32,    // n_o: Origin null basis vector
-    pub ni: f32,    // n_\infty: Infinity null basis vector
+    pub x: f32,  // e1: Euclidean x
+    pub y: f32,  // e2: Euclidean y
+    pub z: f32,  // e3: Euclidean z
+    pub no: f32, // n_o: Origin null basis vector
+    pub ni: f32, // n_\infty: Infinity null basis vector
     pub _pad0: f32,
     pub _pad1: f32,
     pub _pad2: f32,
@@ -183,28 +185,37 @@ impl CgaVector5D {
         }
     }
 
-    /// Reflects this conformal point across a sphere via 1-versor sandwich: P' = S * P * S / ||S||^2.
-    /// This is the classical spherical inversion!
+    /// Reflects this conformal point across a sphere (or plane when `sphere.no == 0`) via the
+    /// exact 1-versor sandwich: P' = -S * P * S / (S . S).
+    /// Scale-invariant under arbitrary non-zero homogeneous rescaling `S -> lambda * S`.
     #[inline]
     pub fn invert_in_sphere(&self, sphere: &Self) -> Self {
-        let center = sphere.to_euclidean();
-        let r_sq = sphere.inner_product(sphere);
-        let pt = self.to_euclidean();
-
-        let dx = pt[0] - center[0];
-        let dy = pt[1] - center[1];
-        let dz = pt[2] - center[2];
-
-        let dist_sq = dx * dx + dy * dy + dz * dz;
-        if dist_sq < 1e-12 {
-            // Origin of inversion maps to infinity
+        let s = if sphere.no.abs() > 1e-12 {
+            *sphere * (1.0 / sphere.no)
+        } else {
+            *sphere
+        };
+        let s_dot_s = s.inner_product(&s);
+        if s_dot_s.abs() < 1e-12 {
+            return Self::infinity();
+        }
+        let s_dot_p = s.inner_product(self);
+        // -S * P * S = (S . S) P - 2 (S . P) S
+        let res = (*self) * s_dot_s - s * (2.0 * s_dot_p);
+        if res.no.abs() < 1e-12 * s_dot_s.abs().max(1.0) {
             Self::infinity()
         } else {
-            let scale = r_sq / dist_sq;
-            let new_x = center[0] + dx * scale;
-            let new_y = center[1] + dy * scale;
-            let new_z = center[2] + dz * scale;
-            Self::point(new_x, new_y, new_z)
+            let inv_no = 1.0 / res.no;
+            Self {
+                x: res.x * inv_no,
+                y: res.y * inv_no,
+                z: res.z * inv_no,
+                no: 1.0,
+                ni: res.ni * inv_no,
+                _pad0: 0.0,
+                _pad1: 0.0,
+                _pad2: 0.0,
+            }
         }
     }
 
@@ -213,6 +224,48 @@ impl CgaVector5D {
     pub fn translate(&self, dx: f32, dy: f32, dz: f32) -> Self {
         let pt = self.to_euclidean();
         Self::point(pt[0] + dx, pt[1] + dy, pt[2] + dz)
+    }
+
+    /// Converts this 5D conformal vector into an explicit 1-vector in Clifford algebra Cl(4, 1, 0).
+    /// Null basis mapping:
+    /// - n_o = 0.5 * (e5 - e4)
+    /// - n_\infty = e4 + e5
+    ///
+    /// Metric invariant: n_o . n_\infty = -1.0, n_o^2 = 0, n_\infty^2 = 0.
+    pub fn to_multivector(&self) -> Multivector<4, 1, 0, 32> {
+        let e1 = Multivector::<4, 1, 0, 32>::basis(1);
+        let e2 = Multivector::<4, 1, 0, 32>::basis(2);
+        let e3 = Multivector::<4, 1, 0, 32>::basis(3);
+        let e4 = Multivector::<4, 1, 0, 32>::basis(4);
+        let e5 = Multivector::<4, 1, 0, 32>::basis(5);
+
+        let no_mv = (e5 - e4) * 0.5;
+        let ni_mv = e4 + e5;
+
+        e1 * self.x + e2 * self.y + e3 * self.z + no_mv * self.no + ni_mv * self.ni
+    }
+
+    /// Reconstructs a 5D conformal vector from a 1-vector in Cl(4, 1, 0).
+    pub fn from_multivector(mv: &Multivector<4, 1, 0, 32>) -> Self {
+        let c1 = mv.coords[1]; // e1
+        let c2 = mv.coords[2]; // e2
+        let c3 = mv.coords[4]; // e3
+        let c4 = mv.coords[8]; // e4
+        let c5 = mv.coords[16]; // e5
+
+        let no = c5 - c4;
+        let ni = 0.5 * (c4 + c5);
+
+        Self {
+            x: c1,
+            y: c2,
+            z: c3,
+            no,
+            ni,
+            _pad0: 0.0,
+            _pad1: 0.0,
+            _pad2: 0.0,
+        }
     }
 
     /// Applies a conformal dilation / uniform scale with factor lambda > 0.
@@ -439,6 +492,28 @@ impl CgaConformalMotor {
         }
     }
 
+    /// Constructs a general conformal motor combining rotation, translation, and dilation.
+    #[inline]
+    pub fn new(
+        axis: [f32; 3],
+        angle_rad: f32,
+        translation: [f32; 3],
+        dilation_factor: f32,
+    ) -> Self {
+        let norm = (axis[0] * axis[0] + axis[1] * axis[1] + axis[2] * axis[2]).sqrt();
+        let inv = if norm > 1e-12 { 1.0 / norm } else { 1.0 };
+        assert!(
+            dilation_factor > 0.0,
+            "Dilation factor must be strictly positive"
+        );
+        Self {
+            translation,
+            rotation_axis: [axis[0] * inv, axis[1] * inv, axis[2] * inv],
+            rotation_angle_rad: angle_rad,
+            dilation_factor,
+        }
+    }
+
     #[inline]
     pub fn from_translation(dx: f32, dy: f32, dz: f32) -> Self {
         Self {
@@ -499,5 +574,54 @@ impl CgaConformalMotor {
         let tz = rz + self.translation[2];
 
         CgaPoint::point(tx, ty, tz)
+    }
+
+    /// Converts this conformal motor into an explicit 32-D multivector versor in Cl(4, 1, 0):
+    /// M = Translator * Rotor * Dilator
+    pub fn to_multivector(&self) -> Multivector<4, 1, 0, 32> {
+        let e1 = Multivector::<4, 1, 0, 32>::basis(1);
+        let e2 = Multivector::<4, 1, 0, 32>::basis(2);
+        let e3 = Multivector::<4, 1, 0, 32>::basis(3);
+        let e4 = Multivector::<4, 1, 0, 32>::basis(4);
+        let e5 = Multivector::<4, 1, 0, 32>::basis(5);
+        let one = Multivector::<4, 1, 0, 32>::from_scalar(1.0);
+        let ni = e4 + e5;
+        let no = (e5 - e4) * 0.5;
+
+        // 1. Dilator: D = cosh(gamma/2) + sinh(gamma/2) * (no ^ ni)
+        let sqrt_l = self.dilation_factor.sqrt();
+        let inv_sqrt_l = 1.0 / sqrt_l;
+        let cosh_half = 0.5 * (sqrt_l + inv_sqrt_l);
+        let sinh_half = 0.5 * (sqrt_l - inv_sqrt_l);
+        let no_wedge_ni = no.wedge(&ni);
+        let dilator = one * cosh_half + no_wedge_ni * sinh_half;
+
+        // 2. Rotor
+        let half_theta = 0.5 * self.rotation_angle_rad;
+        let cos_half = half_theta.cos();
+        let sin_half = half_theta.sin();
+        let bivector_axis = (e2 * e3) * self.rotation_axis[0]
+            + (e3 * e1) * self.rotation_axis[1]
+            + (e1 * e2) * self.rotation_axis[2];
+        let rotor = one * cos_half - bivector_axis * sin_half;
+
+        // 3. Translator
+        let trans_vec =
+            e1 * self.translation[0] + e2 * self.translation[1] + e3 * self.translation[2];
+        let translator = one - (trans_vec * ni) * 0.5;
+
+        translator * rotor * dilator
+    }
+
+    /// Transforms a Conformal Point via full 5D Clifford multivector sandwich product:
+    /// P' = grade_1(M * P * M~)
+    pub fn transform_point_multivector(&self, pt: &CgaPoint) -> CgaPoint {
+        let p_mv = pt.to_multivector();
+        let m = self.to_multivector();
+        let m_rev = m.reverse();
+        let p_prime_mv = m * p_mv * m_rev;
+        let v5 = CgaVector5D::from_multivector(&p_prime_mv);
+        let [x, y, z] = v5.to_euclidean();
+        CgaPoint::point(x, y, z)
     }
 }

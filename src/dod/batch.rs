@@ -7,11 +7,9 @@
 // L1/L2/L3 cache hierarchies on modern 64-bit architectures (x86_64, aarch64, riscv64).
 // ============================================================================
 
-use crate::poincare::cayley_klein::CayleyKleinSpace;
-use crate::lattice::eisenstein::{
-    RATIO_2_SQRT3, SQRT3_DIV2_INV,
-};
+use crate::lattice::eisenstein::{RATIO_2_SQRT3, SQRT3_DIV2_INV};
 use crate::pga::{PgaMotor, PgaPoint};
+use crate::poincare::cayley_klein::CayleyKleinSpace;
 
 /// 64-byte cache-line aligned FP32 accumulator (512 bits = 8 x 64-bit words).
 /// Strictly matches the physical 64-byte line width of modern L1d/L2 caches.
@@ -31,7 +29,9 @@ impl Default for Universal64Accumulator {
 impl Universal64Accumulator {
     #[inline(always)]
     pub const fn zero() -> Self {
-        Self { lanes: [0.0f32; 16] }
+        Self {
+            lanes: [0.0f32; 16],
+        }
     }
 
     /// Creates an accumulator from 16 floats.
@@ -101,10 +101,10 @@ impl SoABatch16 {
     /// Creates an SoA batch from an array of 16 3D points [x, y, z].
     pub fn from_aos_3d(points: &[[f32; 3]; 16]) -> Self {
         let mut batch = Self::default();
-        for i in 0..16 {
-            batch.x[i] = points[i][0];
-            batch.y[i] = points[i][1];
-            batch.z[i] = points[i][2];
+        for (i, pt) in points.iter().enumerate() {
+            batch.x[i] = pt[0];
+            batch.y[i] = pt[1];
+            batch.z[i] = pt[2];
             batch.w[i] = 1.0;
         }
         batch
@@ -144,7 +144,8 @@ impl SoABatch16 {
                 let diff_sq = dx * dx + dy * dy + dz * dz;
 
                 let u_sq = self.x[i] * self.x[i] + self.y[i] * self.y[i] + self.z[i] * self.z[i];
-                let v_sq = other.x[i] * other.x[i] + other.y[i] * other.y[i] + other.z[i] * other.z[i];
+                let v_sq =
+                    other.x[i] * other.x[i] + other.y[i] * other.y[i] + other.z[i] * other.z[i];
 
                 let u_fact = (1.0f32 - abs_tau * u_sq).max(1e-7);
                 let v_fact = (1.0f32 - abs_tau * v_sq).max(1e-7);
@@ -165,7 +166,8 @@ impl SoABatch16 {
                 let diff_sq = dx * dx + dy * dy + dz * dz;
 
                 let u_sq = self.x[i] * self.x[i] + self.y[i] * self.y[i] + self.z[i] * self.z[i];
-                let v_sq = other.x[i] * other.x[i] + other.y[i] * other.y[i] + other.z[i] * other.z[i];
+                let v_sq =
+                    other.x[i] * other.x[i] + other.y[i] * other.y[i] + other.z[i] * other.z[i];
 
                 let u_fact = 1.0f32 + tau * u_sq;
                 let v_fact = 1.0f32 + tau * v_sq;
@@ -297,15 +299,15 @@ impl SoAPgaMotorBatch16 {
     #[inline]
     pub fn from_aos(motors: &[PgaMotor; 16]) -> Self {
         let mut batch = Self::identity();
-        for i in 0..16 {
-            batch.s[i] = motors[i].s;
-            batch.b23[i] = motors[i].b23;
-            batch.b31[i] = motors[i].b31;
-            batch.b12[i] = motors[i].b12;
-            batch.d01[i] = motors[i].d01;
-            batch.d02[i] = motors[i].d02;
-            batch.d03[i] = motors[i].d03;
-            batch.e0123[i] = motors[i].e0123;
+        for (i, motor) in motors.iter().enumerate() {
+            batch.s[i] = motor.s;
+            batch.b23[i] = motor.b23;
+            batch.b31[i] = motor.b31;
+            batch.b12[i] = motor.b12;
+            batch.d01[i] = motor.d01;
+            batch.d02[i] = motor.d02;
+            batch.d03[i] = motor.d03;
+            batch.e0123[i] = motor.e0123;
         }
         batch
     }

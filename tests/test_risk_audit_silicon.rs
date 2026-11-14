@@ -34,9 +34,9 @@ fn test_risk_1_w_down_invariance_and_zero_desrotation() {
         }
     }
     let mut h = vec![0.0f32; d_ff];
-    for c in 0..d_ff {
+    for (c, dst) in h.iter_mut().enumerate() {
         let t = (c as f32 + 42.0) * 0.05;
-        h[c] = (t.sin() * 0.8) + (t * 0.3).cos() * 0.2;
+        *dst = (t.sin() * 0.8) + (t * 0.3).cos() * 0.2;
     }
 
     // 1. Exact canonical product: y_exact = W_down * h (vector in R^d_model)
@@ -77,13 +77,25 @@ fn test_risk_1_w_down_invariance_and_zero_desrotation() {
     let norm_exact = (y_exact.iter().map(|&v| v * v).sum::<f32>()).sqrt();
     let rel_err = max_diff / norm_exact;
 
-    println!("  - Exact norm ||y|| (R^2048)              : {:.6}", norm_exact);
-    println!("  - Max absolute silicon difference        : {:.2e}", max_diff);
-    println!("  - Relative error with ZERO unrotation    : {:.2e}", rel_err);
+    println!(
+        "  - Exact norm ||y|| (R^2048)              : {:.6}",
+        norm_exact
+    );
+    println!(
+        "  - Max absolute silicon difference        : {:.2e}",
+        max_diff
+    );
+    println!(
+        "  - Relative error with ZERO unrotation    : {:.2e}",
+        rel_err
+    );
     println!("  -> VERDICT: Output y[r] already resides natively in d_model space.");
     println!("     Layer unrotation is mathematically redundant.");
 
-    assert!(rel_err < 1e-5, "y_clifford must match y_exact without output unrotation");
+    assert!(
+        rel_err < 1e-5,
+        "y_clifford must match y_exact without output unrotation"
+    );
 }
 
 #[test]
@@ -95,18 +107,21 @@ fn test_risk_2_diadic_restriction_on_1408() {
     let d_ff = 1408usize;
     assert_eq!(d_ff % 128, 0, "1408 must be a multiple of 128");
     let n_blocks = d_ff / 128;
-    assert_eq!(n_blocks, 11, "1408 must decompose into exactly 11 blocks of 128");
+    assert_eq!(
+        n_blocks, 11,
+        "1408 must decompose into exactly 11 blocks of 128"
+    );
 
     let versor = DyadicWalshVersor::new(d_ff, 42);
 
     // Vector with outliers injected in distinct 128-element blocks
     let mut v = vec![0.0f32; d_ff];
-    for i in 0..d_ff {
-        v[i] = (i as f32 * 0.1).sin() * 0.5;
+    for (i, dst) in v.iter_mut().enumerate() {
+        *dst = (i as f32 * 0.1).sin() * 0.5;
     }
-    v[42] = 50.0;     // Outlier in block 0
-    v[200] = -45.0;   // Outlier in block 1
-    v[1350] = 60.0;   // Outlier in block 10
+    v[42] = 50.0; // Outlier in block 0
+    v[200] = -45.0; // Outlier in block 1
+    v[1350] = 60.0; // Outlier in block 10
 
     let norm_orig: f32 = (v.iter().map(|&x| x * x).sum::<f32>()).sqrt();
 
@@ -133,16 +148,37 @@ fn test_risk_2_diadic_restriction_on_1408() {
     }
 
     println!("  - Hadamard blocks applied                : 11 x H_128 (exact 11 cache lines)");
-    println!("  - Original norm ||x||                    : {:.6}", norm_orig);
-    println!("  - Rotated norm ||R(x)||                  : {:.6}", norm_rot);
-    println!("  - Isometry error (||x|| - ||R(x)||)      : {:.2e}", norm_diff);
+    println!(
+        "  - Original norm ||x||                    : {:.6}",
+        norm_orig
+    );
+    println!(
+        "  - Rotated norm ||R(x)||                  : {:.6}",
+        norm_rot
+    );
+    println!(
+        "  - Isometry error (||x|| - ||R(x)||)      : {:.2e}",
+        norm_diff
+    );
     println!("  - Max input outlier                      : 60.0");
-    println!("  - Max value after H_128                  : {:.4} (CLT smearing by sqrt(128))", max_rot_val);
-    println!("  - Inversion error R^-1(R(x))             : {:.2e}", max_recon_err);
+    println!(
+        "  - Max value after H_128                  : {:.4} (CLT smearing by sqrt(128))",
+        max_rot_val
+    );
+    println!(
+        "  - Inversion error R^-1(R(x))             : {:.2e}",
+        max_recon_err
+    );
     println!("  -> VERDICT: 128-block transformation is an exact norm-preserving isometry.");
 
-    assert!(norm_diff < 1e-4, "Isometry must be preserved with error < 1e-4");
-    assert!(max_recon_err < 1e-5, "Reversibility must be exact with error < 1e-5");
+    assert!(
+        norm_diff < 1e-4,
+        "Isometry must be preserved with error < 1e-4"
+    );
+    assert!(
+        max_recon_err < 1e-5,
+        "Reversibility must be exact with error < 1e-5"
+    );
 }
 
 // Strict reference emulation of VrcAsym64 (4.50 bpw, 36 bytes / 64 weights) for head-to-head comparison
@@ -156,10 +192,18 @@ fn pack_asym64_row(weights: &[f32]) -> Vec<u8> {
         let mut min_val = f32::INFINITY;
         let mut max_val = f32::NEG_INFINITY;
         for &w in chunk {
-            if w < min_val { min_val = w; }
-            if w > max_val { max_val = w; }
+            if w < min_val {
+                min_val = w;
+            }
+            if w > max_val {
+                max_val = w;
+            }
         }
-        let scale = if max_val > min_val { (max_val - min_val) / 15.0 } else { 1.0 };
+        let scale = if max_val > min_val {
+            (max_val - min_val) / 15.0
+        } else {
+            1.0
+        };
         let inv_scale = 1.0 / scale;
 
         let off = b * 36;
@@ -169,8 +213,12 @@ fn pack_asym64_row(weights: &[f32]) -> Vec<u8> {
         bytes[off + 2..off + 4].copy_from_slice(&m_bf16.to_le_bytes());
 
         for i in 0..32 {
-            let q0 = ((chunk[i * 2] - min_val) * inv_scale).round().clamp(0.0, 15.0) as u8;
-            let q1 = ((chunk[i * 2 + 1] - min_val) * inv_scale).round().clamp(0.0, 15.0) as u8;
+            let q0 = ((chunk[i * 2] - min_val) * inv_scale)
+                .round()
+                .clamp(0.0, 15.0) as u8;
+            let q1 = ((chunk[i * 2 + 1] - min_val) * inv_scale)
+                .round()
+                .clamp(0.0, 15.0) as u8;
             bytes[off + 4 + i] = (q0 & 0x0F) | ((q1 & 0x0F) << 4);
         }
     }
@@ -213,18 +261,18 @@ fn test_risk_3_throughput_silicon_benchmark_1408x2048() {
     // 1. Generate deterministic weight matrix and input activation
     let mut weights = vec![0.0f32; total_weights];
     let mut state = 0xabcdef1234567890u64;
-    for i in 0..total_weights {
+    for dst in &mut weights {
         state = state.wrapping_mul(6364136223846793005).wrapping_add(1);
         let u = (state >> 32) as f32 / 4294967296.0;
-        weights[i] = (u - 0.5) * 0.1;
+        *dst = (u - 0.5) * 0.1;
     }
     // Outliers
     weights[42] = 35.0;
     weights[350] = -28.0;
 
     let mut x = vec![0.0f32; cols];
-    for i in 0..cols {
-        x[i] = (i as f32 * 0.05).sin() * 0.8;
+    for (i, dst) in x.iter_mut().enumerate() {
+        *dst = (i as f32 * 0.05).sin() * 0.8;
     }
     // Precompute block sums for Asym64
     let x_sums: Vec<f32> = x.chunks_exact(64).map(|c| c.iter().sum()).collect();
@@ -238,7 +286,8 @@ fn test_risk_3_throughput_silicon_benchmark_1408x2048() {
     for r in 0..rows {
         let row_slice = &weights[r * cols..(r + 1) * cols];
         let row_bytes = pack_asym64_row(row_slice);
-        asym64_matrix[r * bytes_per_row_asym64..(r + 1) * bytes_per_row_asym64].copy_from_slice(&row_bytes);
+        asym64_matrix[r * bytes_per_row_asym64..(r + 1) * bytes_per_row_asym64]
+            .copy_from_slice(&row_bytes);
     }
 
     // --- Pack into Clifford3Bit (4.00 effective bpw, 64B / 128w) ---
@@ -246,84 +295,204 @@ fn test_risk_3_throughput_silicon_benchmark_1408x2048() {
     let total_bytes_3bit = tensor_3bit.cache_lines.len() * 64; // 1408 * 16 * 64 = 1,441,792 bytes
 
     println!(" Physical Memory Footprint:");
-    println!("  - Asym64 Bytes per row (2048 w)      : {} B (4.50 bpw)", bytes_per_row_asym64);
-    println!("  - Clifford3Bit Bytes per row (2048 w): {} B (4.00 bpw)", (cols / 128) * 64);
-    println!("  - Net bandwidth reduction            : {:.2}% (from 1,152 B to 1,024 B per row)",
-             (1.0 - (1024.0 / 1152.0)) * 100.0);
-    println!("  - Total footprint Asym64             : {:.3} MiB", total_bytes_asym64 as f64 / 1048576.0);
-    println!("  - Total footprint Clifford3Bit       : {:.3} MiB", total_bytes_3bit as f64 / 1048576.0);
+    println!(
+        "  - Asym64 Bytes per row (2048 w)      : {} B (4.50 bpw)",
+        bytes_per_row_asym64
+    );
+    println!(
+        "  - Clifford3Bit Bytes per row (2048 w): {} B (4.00 bpw)",
+        (cols / 128) * 64
+    );
+    println!(
+        "  - Net bandwidth reduction            : {:.2}% (from 1,152 B to 1,024 B per row)",
+        (1.0 - (1024.0 / 1152.0)) * 100.0
+    );
+    println!(
+        "  - Total footprint Asym64             : {:.3} MiB",
+        total_bytes_asym64 as f64 / 1048576.0
+    );
+    println!(
+        "  - Total footprint Clifford3Bit       : {:.3} MiB",
+        total_bytes_3bit as f64 / 1048576.0
+    );
     println!("--------------------------------------------------------------------");
 
-    // Warmup
+    // Warmup passes to stabilize caches/branch predictors before timing
+    let mut out_fp32 = vec![0.0f32; rows];
     let mut out_asym = vec![0.0f32; rows];
-    let mut out_3bit = vec![0.0f32; rows];
-
-    // Benchmark VrcAsym64
-    let iters = 20usize;
-    let t0 = Instant::now();
-    for _ in 0..iters {
-        for r in 0..rows {
-            let row_bytes = &asym64_matrix[r * bytes_per_row_asym64..(r + 1) * bytes_per_row_asym64];
-            out_asym[r] = benchmark_dot_row_asym64(row_bytes, &x, &x_sums);
-        }
-    }
-    let elapsed_asym = t0.elapsed() / (iters as u32);
-    let us_asym = elapsed_asym.as_micros() as f64;
-    let bw_asym = (total_bytes_asym64 as f64 / 1e9) / (elapsed_asym.as_secs_f64());
-
-    // Benchmark Clifford3Bit (Scalar loop)
-    let t1 = Instant::now();
-    for _ in 0..iters {
-        tensor_3bit.matvec(&x, &mut out_3bit, &versor);
-    }
-    let elapsed_3bit = t1.elapsed() / (iters as u32);
-    let us_3bit = elapsed_3bit.as_micros() as f64;
-    let bw_3bit = (total_bytes_3bit as f64 / 1e9) / (elapsed_3bit.as_secs_f64());
-
-    // Benchmark Clifford3Bit (AVX2 vpermps kernel)
+    let mut out_3bit_scalar = vec![0.0f32; rows];
     let mut out_3bit_avx2 = vec![0.0f32; rows];
-    let t2 = Instant::now();
-    for _ in 0..iters {
-        matvec_clifford_3bit_avx2(&tensor_3bit.cache_lines, rows, cols, &x, &mut out_3bit_avx2, &versor);
-    }
-    let elapsed_3bit_avx2 = t2.elapsed() / (iters as u32);
-    let us_3bit_avx2 = elapsed_3bit_avx2.as_micros() as f64;
-    let bw_3bit_avx2 = (total_bytes_3bit as f64 / 1e9) / (elapsed_3bit_avx2.as_secs_f64());
 
-    // Exact FP32 reference for cosine similarity
-    let mut out_exact = vec![0.0f32; rows];
     for r in 0..rows {
         let row = &weights[r * cols..(r + 1) * cols];
-        out_exact[r] = row.iter().zip(x.iter()).map(|(&w, &x)| w * x).sum();
+        out_fp32[r] = row.iter().zip(x.iter()).map(|(&w, &xi)| w * xi).sum();
     }
+    tensor_3bit.matvec_scalar(&x, &mut out_3bit_scalar, &versor);
+    tensor_3bit.matvec(&x, &mut out_3bit_avx2, &versor);
 
-    let cos_asym = cosine_similarity(&out_exact, &out_asym);
-    let cos_3bit = cosine_similarity(&out_exact, &out_3bit);
-    let cos_3bit_avx2 = cosine_similarity(&out_exact, &out_3bit_avx2);
+    let iters = 50usize;
+    let flops = 2.0 * (rows as f64) * (cols as f64);
+    let total_bytes_fp32 = total_weights * std::mem::size_of::<f32>();
 
-    println!(" SILICON MEASURED RESULTS:");
-    println!("  [VrcAsym64 - 4.50 bpw (v5 Reference)]");
-    println!("    - MatVec Latency (1408 x 2048)  : {:.1} us", us_asym);
-    println!("    - Measured Bandwidth            : {:.2} GB/s", bw_asym);
-    println!("    - Output Cosine vs FP32         : {:.5}", cos_asym);
-    println!("  [Clifford3Bit - 4.00 bpw (Scalar Unpack)]");
-    println!("    - MatVec Latency (1408 x 2048)  : {:.1} us", us_3bit);
-    println!("    - Measured Bandwidth            : {:.2} GB/s", bw_3bit);
+    // Benchmark Dense FP32 baseline (32.00 bpw)
+    let t_fp32 = Instant::now();
+    for _ in 0..iters {
+        let xb = std::hint::black_box(&x);
+        for r in 0..rows {
+            let row = &weights[r * cols..(r + 1) * cols];
+            out_fp32[r] = row.iter().zip(xb.iter()).map(|(&w, &xi)| w * xi).sum();
+        }
+        std::hint::black_box(&mut out_fp32);
+    }
+    let elapsed_fp32 = t_fp32.elapsed() / (iters as u32);
+    let us_fp32 = elapsed_fp32.as_secs_f64() * 1e6;
+    let gflops_fp32 = flops / elapsed_fp32.as_secs_f64() / 1e9;
+    let bw_fp32 = (total_bytes_fp32 as f64 / 1e9) / elapsed_fp32.as_secs_f64();
+
+    // Benchmark VrcAsym64 (4.50 bpw)
+    let t0 = Instant::now();
+    for _ in 0..iters {
+        let xb = std::hint::black_box(&x);
+        for r in 0..rows {
+            let row_bytes =
+                &asym64_matrix[r * bytes_per_row_asym64..(r + 1) * bytes_per_row_asym64];
+            out_asym[r] = benchmark_dot_row_asym64(row_bytes, xb, &x_sums);
+        }
+        std::hint::black_box(&mut out_asym);
+    }
+    let elapsed_asym = t0.elapsed() / (iters as u32);
+    let us_asym = elapsed_asym.as_secs_f64() * 1e6;
+    let gflops_asym = flops / elapsed_asym.as_secs_f64() / 1e9;
+    let bw_asym = (total_bytes_asym64 as f64 / 1e9) / elapsed_asym.as_secs_f64();
+
+    // Benchmark Clifford3Bit (Explicit scalar path)
+    let mut scalar_scratch = vec![0.0f32; cols];
+    let t1 = Instant::now();
+    for _ in 0..iters {
+        tensor_3bit.matvec_scalar_with_scratch(
+            std::hint::black_box(&x),
+            &mut out_3bit_scalar,
+            &versor,
+            &mut scalar_scratch,
+        );
+        std::hint::black_box(&mut out_3bit_scalar);
+    }
+    let elapsed_3bit = t1.elapsed() / (iters as u32);
+    let us_3bit = elapsed_3bit.as_secs_f64() * 1e6;
+    let gflops_3bit = flops / elapsed_3bit.as_secs_f64() / 1e9;
+    let bw_3bit = (total_bytes_3bit as f64 / 1e9) / elapsed_3bit.as_secs_f64();
+
+    // Benchmark Clifford3Bit (AVX2 vpermps kernel)
+    let mut avx2_scratch = vec![0.0f32; cols];
+    let t2 = Instant::now();
+    for _ in 0..iters {
+        tensor_3bit.matvec_with_scratch(
+            std::hint::black_box(&x),
+            &mut out_3bit_avx2,
+            &versor,
+            &mut avx2_scratch,
+        );
+        std::hint::black_box(&mut out_3bit_avx2);
+    }
+    let elapsed_3bit_avx2 = t2.elapsed() / (iters as u32);
+    let us_3bit_avx2 = elapsed_3bit_avx2.as_secs_f64() * 1e6;
+    let gflops_3bit_avx2 = flops / elapsed_3bit_avx2.as_secs_f64() / 1e9;
+    let bw_3bit_avx2 = (total_bytes_3bit as f64 / 1e9) / elapsed_3bit_avx2.as_secs_f64();
+
+    let cos_asym = cosine_similarity(&out_fp32, &out_asym);
+    let cos_3bit = cosine_similarity(&out_fp32, &out_3bit_scalar);
+    let cos_3bit_avx2 = cosine_similarity(&out_fp32, &out_3bit_avx2);
+    let rel_l2_asym = relative_l2_error(&out_fp32, &out_asym);
+    let rel_l2_3bit = relative_l2_error(&out_fp32, &out_3bit_avx2);
+
+    println!(" SILICON MEASURED RESULTS ({} iterations avg):", iters);
+    println!(
+        "  [Dense FP32 Baseline - 32.00 bpw, {:.2} MiB]",
+        total_bytes_fp32 as f64 / 1048576.0
+    );
+    println!("    - MatVec Latency (1408 x 2048)  : {:.1} us", us_fp32);
+    println!(
+        "    - Throughput                    : {:.2} GFLOPS ({:.2} GB/s)",
+        gflops_fp32, bw_fp32
+    );
+    println!(
+        "  [VrcAsym64 - 4.50 bpw, {:.2} MiB]",
+        total_bytes_asym64 as f64 / 1048576.0
+    );
+    println!(
+        "    - MatVec Latency (1408 x 2048)  : {:.1} us ({:.2}x vs FP32)",
+        us_asym,
+        us_fp32 / us_asym
+    );
+    println!(
+        "    - Throughput                    : {:.2} GFLOPS ({:.2} GB/s)",
+        gflops_asym, bw_asym
+    );
+    println!(
+        "    - Output Cosine / Rel L2 vs FP32: {:.5} / {:.4}",
+        cos_asym, rel_l2_asym
+    );
+    println!("  [Clifford3Bit - 4.00 bpw (Scalar Reference)]");
+    println!(
+        "    - MatVec Latency (1408 x 2048)  : {:.1} us ({:.2}x vs FP32)",
+        us_3bit,
+        us_fp32 / us_3bit
+    );
+    println!(
+        "    - Throughput                    : {:.2} GFLOPS ({:.2} GB/s)",
+        gflops_3bit, bw_3bit
+    );
     println!("    - Output Cosine vs FP32         : {:.5}", cos_3bit);
-    println!("  [Clifford3Bit - 4.00 bpw (AVX2 vpermps Kernel)]");
-    println!("    - MatVec Latency (1408 x 2048)  : {:.1} us (including rotation)", us_3bit_avx2);
-    println!("    - Measured Bandwidth            : {:.2} GB/s", bw_3bit_avx2);
-    println!("    - Output Cosine vs FP32         : {:.5}", cos_3bit_avx2);
+    println!(
+        "  [Clifford3Bit - 4.00 bpw (AVX2 vpermps Kernel, {:.2} MiB)]",
+        total_bytes_3bit as f64 / 1048576.0
+    );
+    println!(
+        "    - MatVec Latency (1408 x 2048)  : {:.1} us ({:.2}x vs FP32)",
+        us_3bit_avx2,
+        us_fp32 / us_3bit_avx2
+    );
+    println!(
+        "    - Throughput                    : {:.2} GFLOPS ({:.2} GB/s)",
+        gflops_3bit_avx2, bw_3bit_avx2
+    );
+    println!(
+        "    - Output Cosine / Rel L2 vs FP32: {:.5} / {:.4}",
+        cos_3bit_avx2, rel_l2_3bit
+    );
     println!("--------------------------------------------------------------------");
-    println!(" AVX2 vs ASYM64 COMPARISON:");
-    println!("  -> AVX2 Speedup over Scalar       : {:.2}x", us_3bit / us_3bit_avx2);
-    if us_3bit_avx2 < us_asym {
-        println!("  -> SILICON WIN: Clifford3Bit AVX2 is {:.2}x FASTER than VrcAsym64 ({:.1} us vs {:.1} us)!",
-                 us_asym / us_3bit_avx2, us_3bit_avx2, us_asym);
-    } else {
-        println!("  -> Clifford3Bit AVX2 takes {:.1} us vs {:.1} us for Asym64 (ratio {:.2}x).",
-                 us_3bit_avx2, us_asym, us_3bit_avx2 / us_asym);
+    println!(" KERNEL SPEEDUP COMPARISON:");
+    println!(
+        "  -> AVX2 Speedup over Scalar       : {:.2}x",
+        us_3bit / us_3bit_avx2
+    );
+    println!(
+        "  -> AVX2 Speedup over Dense FP32   : {:.2}x",
+        us_fp32 / us_3bit_avx2
+    );
+    println!(
+        "  -> AVX2 vs VrcAsym64 ratio        : {:.2}x",
+        us_asym / us_3bit_avx2
+    );
+
+    for (a, b) in out_3bit_scalar.iter().zip(out_3bit_avx2.iter()) {
+        assert!(
+            (a - b).abs() < 1e-3,
+            "Scalar vs AVX2 mismatch: {} vs {}",
+            a,
+            b
+        );
     }
+}
+
+fn relative_l2_error(exact: &[f32], approx: &[f32]) -> f32 {
+    let num: f32 = exact
+        .iter()
+        .zip(approx.iter())
+        .map(|(&e, &a)| (e - a) * (e - a))
+        .sum();
+    let den: f32 = exact.iter().map(|&e| e * e).sum();
+    (num / den.max(1e-12)).sqrt()
 }
 
 fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {

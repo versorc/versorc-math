@@ -1,6 +1,6 @@
 {
   "title": "versorc-math: High-Performance Clifford Geometric Algebra & Versor Quantization Engine",
-  "description": "A zero-overhead, SIMD-accelerated Clifford Geometric Algebra library and Dyadic Versor quantization engine in Rust and Python/NumPy, supporting Cl(3,0), Cl(2,0), 3D PGA Cl*(3,0,1), 3D CGA Cl(4,1), 4D Spacetime Algebra Cl(1,3) with full Lounesto spinor classification, Gosset E8 lattice closest-vector decoding, and TurboQuant 3-bit isotropic versor rotations.",
+  "description": "A zero-overhead, SIMD-accelerated Clifford Geometric Algebra library and Dyadic Versor quantization engine in Rust and Python, supporting Cl(3,0), Cl(2,0), 3D PGA Cl*(3,0,1), 3D CGA Cl(4,1), 4D Spacetime Algebra Cl(1,3) with full Lounesto spinor classification, Gosset E8 lattice closest-vector decoding, and TurboQuant 3-bit isotropic versor rotations.",
   "creators": [
     {
       "name": "The VersorC Project Contributors"
@@ -21,7 +21,6 @@
     "e8 lattice",
     "rust",
     "python",
-    "numpy",
     "vulkan"
   ],
   "upload_type": "software"

@@ -45,8 +45,14 @@ fn test_e8_minimal_240_roots_geometry() {
         }
     }
 
-    assert_eq!(integer_count, 112, "Must contain exactly 112 integer roots in D8");
-    assert_eq!(half_integer_count, 128, "Must contain exactly 128 half-integer roots");
+    assert_eq!(
+        integer_count, 112,
+        "Must contain exactly 112 integer roots in D8"
+    );
+    assert_eq!(
+        half_integer_count, 128,
+        "Must contain exactly 128 half-integer roots"
+    );
 }
 
 #[test]
@@ -56,21 +62,35 @@ fn test_conway_sloane_closest_vector_exactness() {
     let perturbed = [1.1, -0.9, 0.05, -0.05, 0.02, -0.01, 0.0, 0.03];
 
     let projected = E8Lattice::project_to_e8(&perturbed);
-    assert_eq!(projected, root, "Conway-Sloane must recover the true nearest E8 lattice point");
+    assert_eq!(
+        projected, root,
+        "Conway-Sloane must recover the true nearest E8 lattice point"
+    );
 
     // Perturb a half-integer root
     let half_root = [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]; // 0 negative signs (even)
     let half_perturbed = [0.45, 0.55, 0.48, 0.52, 0.49, 0.51, 0.50, 0.49];
 
     let projected_half = E8Lattice::project_to_e8(&half_perturbed);
-    assert_eq!(projected_half, half_root, "Conway-Sloane must recover half-integer E8 point");
+    assert_eq!(
+        projected_half, half_root,
+        "Conway-Sloane must recover half-integer E8 point"
+    );
 }
 
 #[test]
 fn test_e8_codebook_l1d_alignment_and_nibble_encoding() {
     let cb = E8LatticeCodebook::new();
-    assert_eq!(std::mem::size_of_val(&cb), 1024, "Codebook must be exactly 1024 bytes (1 KiB)");
-    assert_eq!(std::mem::align_of_val(&cb), 64, "Codebook must be 64-byte aligned for L1d lines");
+    assert_eq!(
+        std::mem::size_of_val(&cb),
+        1024,
+        "Codebook must be exactly 1024 bytes (1 KiB)"
+    );
+    assert_eq!(
+        std::mem::align_of_val(&cb),
+        64,
+        "Codebook must be 64-byte aligned for L1d lines"
+    );
 
     // Test nibble bijective decoding
     // Nibble 0: q0=0 -> -1.5, q1=0 -> -1.5
@@ -85,5 +105,21 @@ fn test_e8_codebook_l1d_alignment_and_nibble_encoding() {
     let x = [0.5f32, -0.5, 1.5, -1.5, 0.5, 0.5, -0.5, -0.5];
     let nibbles = E8LatticeCodebook::project_and_encode_to_nibbles(&x, 1.0);
     let recon = E8LatticeCodebook::decode_4_nibbles(&nibbles, 1.0);
-    assert_eq!(recon, x, "Reconstructed 8D vector must match quantization points");
+    assert_eq!(
+        recon, x,
+        "Reconstructed 8D vector must match quantization points"
+    );
+
+    // Verify all 128 half-integer centroids stored in the 1 KiB codebook table
+    for idx in 0..E8_NUM_CENTROIDS {
+        let c = cb.decode_centroid(idx, 1.0);
+        let neg_count = c.iter().filter(|&&v| v < 0.0).count();
+        assert_eq!(
+            neg_count % 2,
+            0,
+            "Centroid {} must have even minus-sign parity",
+            idx
+        );
+        assert_eq!(cb.nearest_centroid(&c), idx);
+    }
 }

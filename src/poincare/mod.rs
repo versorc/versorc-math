@@ -76,7 +76,11 @@ impl PoincarePoint {
     /// Geodesic hyperbolic distance:
     /// d_B(u, v) = arcosh(1 + 2 * ||u - v||^2 / ((1 - ||u||^2) * (1 - ||v||^2)))
     pub fn geodesic_distance(&self, other: &Self) -> f32 {
-        assert_eq!(self.dim(), other.dim(), "Dimension mismatch in hyperbolic distance");
+        assert_eq!(
+            self.dim(),
+            other.dim(),
+            "Dimension mismatch in hyperbolic distance"
+        );
         let mut diff_sq = 0.0f32;
         for i in 0..self.dim() {
             let d = self.coords[i] - other.coords[i];
@@ -94,7 +98,11 @@ impl PoincarePoint {
     /// Möbius gyrovector addition in the Poincaré ball:
     /// u (+) v = ((1 + 2<u, v> + ||v||^2) u + (1 - ||u||^2) v) / (1 + 2<u, v> + ||u||^2 ||v||^2)
     pub fn mobius_add(&self, other: &Self) -> Self {
-        assert_eq!(self.dim(), other.dim(), "Dimension mismatch in Mobius addition");
+        assert_eq!(
+            self.dim(),
+            other.dim(),
+            "Dimension mismatch in Mobius addition"
+        );
         let u_sq = self.norm_sq().min(MAX_NORM_SQ);
         let v_sq = other.norm_sq().min(MAX_NORM_SQ);
 
@@ -109,8 +117,12 @@ impl PoincarePoint {
         let inv_denom = 1.0f32 / denom.max(1e-7);
 
         let mut res = vec![0.0f32; self.dim()];
-        for i in 0..self.dim() {
-            res[i] = (num_u_coeff * self.coords[i] + num_v_coeff * other.coords[i]) * inv_denom;
+        for ((dst, &uc), &vc) in res
+            .iter_mut()
+            .zip(self.coords.iter())
+            .zip(other.coords.iter())
+        {
+            *dst = (num_u_coeff * uc + num_v_coeff * vc) * inv_denom;
         }
 
         Self::new(res)
@@ -120,7 +132,11 @@ impl PoincarePoint {
     /// Preserves strict ranking order: argmin d_B(u, v) == argmin key(u, v).
     #[inline(always)]
     pub fn hyperbolic_distance_key(&self, other: &Self) -> f32 {
-        assert_eq!(self.dim(), other.dim(), "Dimension mismatch in hyperbolic distance key");
+        assert_eq!(
+            self.dim(),
+            other.dim(),
+            "Dimension mismatch in hyperbolic distance key"
+        );
         let mut diff_sq = 0.0f32;
         for i in 0..self.dim() {
             let d = self.coords[i] - other.coords[i];
@@ -160,7 +176,11 @@ impl PoincarePoint {
     /// using projective equivalence in the Klein model:
     /// \mu_K = \frac{\sum_k w_k \gamma_k k_k}{\sum_k w_k \gamma_k}, \quad \gamma_k = \frac{1}{\sqrt{1 - ||k_k||^2}}
     pub fn einstein_midpoint(points: &[Self], weights: &[f32]) -> Self {
-        assert_eq!(points.len(), weights.len(), "Points and weights count mismatch");
+        assert_eq!(
+            points.len(),
+            weights.len(),
+            "Points and weights count mismatch"
+        );
         if points.is_empty() {
             return Self::new(vec![]);
         }
@@ -208,13 +228,17 @@ impl PoincarePoint {
     /// z^{(t+1)} = z^{(t)} - \eta * ((1 - ||z||^2) / 2)^2 * \nabla_E \mathcal{L}
     #[inline]
     pub fn rsgd_step(&mut self, euclid_grad: &[f32], learning_rate: f32) {
-        assert_eq!(self.dim(), euclid_grad.len(), "Dimension mismatch in RSGD step");
+        assert_eq!(
+            self.dim(),
+            euclid_grad.len(),
+            "Dimension mismatch in RSGD step"
+        );
         let n_sq = self.norm_sq().min(MAX_NORM_SQ);
         let conf = (1.0f32 - n_sq) * 0.5f32;
         let riemann_scale = learning_rate * (conf * conf);
 
-        for i in 0..self.dim() {
-            self.coords[i] -= riemann_scale * euclid_grad[i];
+        for (coord, &grad) in self.coords.iter_mut().zip(euclid_grad.iter()) {
+            *coord -= riemann_scale * grad;
         }
         self.project_to_ball();
     }

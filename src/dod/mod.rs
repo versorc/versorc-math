@@ -5,6 +5,4 @@
 
 pub mod batch;
 
-pub use batch::{
-    SoABatch16, SoAPgaMotorBatch16, Universal64Accumulator, Universal64Chunk,
-};
+pub use batch::{SoABatch16, SoAPgaMotorBatch16, Universal64Accumulator, Universal64Chunk};

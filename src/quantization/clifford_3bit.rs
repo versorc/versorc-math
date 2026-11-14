@@ -30,6 +30,96 @@ pub const LLOYD_MAX_3BIT_BOUNDS: [f32; 3] = [
     1.747_966_2, // Boundary 2-3
 ];
 
+/// Dynamically computes optimal Lloyd-Max 1D scalar quantization centroids and decision boundaries
+/// for an empirical distribution of sample data via iterative expectation-maximization.
+pub fn compute_lloyd_max_1d(
+    samples: &[f32],
+    num_levels: usize,
+    max_iters: usize,
+    tolerance: f32,
+) -> (Vec<f32>, Vec<f32>) {
+    assert!(num_levels >= 2, "Lloyd-Max requires at least 2 levels");
+    assert!(!samples.is_empty(), "Samples cannot be empty");
+
+    let mut sorted = samples.to_vec();
+    sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    let n = sorted.len();
+
+    // Initialize centroids evenly spaced across quantiles
+    let mut centroids = Vec::with_capacity(num_levels);
+    for k in 0..num_levels {
+        let q_idx = ((k as f32 + 0.5) / num_levels as f32 * n as f32) as usize;
+        centroids.push(sorted[q_idx.min(n - 1)]);
+    }
+
+    let mut bounds = vec![0.0f32; num_levels - 1];
+
+    for _ in 0..max_iters {
+        // 1. Update decision boundaries
+        for k in 0..num_levels - 1 {
+            bounds[k] = 0.5 * (centroids[k] + centroids[k + 1]);
+        }
+
+        // 2. Assign samples to clusters and compute new centroids
+        let mut sums = vec![0.0f32; num_levels];
+        let mut counts = vec![0usize; num_levels];
+
+        for &x in &sorted {
+            let mut assigned = num_levels - 1;
+            for (k, &b) in bounds.iter().enumerate() {
+                if x < b {
+                    assigned = k;
+                    break;
+                }
+            }
+            sums[assigned] += x;
+            counts[assigned] += 1;
+        }
+
+        let mut max_shift = 0.0f32;
+        for k in 0..num_levels {
+            if counts[k] > 0 {
+                let new_c = sums[k] / (counts[k] as f32);
+                let shift = (new_c - centroids[k]).abs();
+                if shift > max_shift {
+                    max_shift = shift;
+                }
+                centroids[k] = new_c;
+            }
+        }
+
+        if max_shift < tolerance {
+            break;
+        }
+    }
+
+    // Final boundary update
+    for k in 0..num_levels - 1 {
+        bounds[k] = 0.5 * (centroids[k] + centroids[k + 1]);
+    }
+
+    (centroids, bounds)
+}
+
+/// Dynamically computes optimal 3-bit symmetric Lloyd-Max magnitude centroids (4 levels)
+/// and decision boundaries (3 bounds) for normalized absolute weights `|w| / sigma`.
+///
+/// The resulting `(centroids, bounds)` pair can be passed directly into
+/// [`Clifford3BitWord64::pack_with_codebook`], [`Clifford3BitWord64::pack_least_squares_with_codebook`],
+/// and [`Clifford3BitWord64::unpack_with_codebook`] for layer-calibrated quantization.
+pub fn compute_symmetric_lloyd_max_3bit(
+    abs_samples: &[f32],
+    max_iters: usize,
+    tolerance: f32,
+) -> ([f32; 4], [f32; 3]) {
+    let (centroids, bounds) = compute_lloyd_max_1d(abs_samples, 4, max_iters, tolerance);
+    let mut c4 = [0.0f32; 4];
+    let mut b3 = [0.0f32; 3];
+    c4.copy_from_slice(&centroids[..4]);
+    b3.copy_from_slice(&bounds[..3]);
+    (c4, b3)
+}
+
 /// Single 64-bit universal storage word.
 /// Contains exactly 16 3-bit quantized weights (48 bits) + 1 BF16 scale (16 bits).
 /// Total: 64 bits (8 bytes). Zero bit waste.
@@ -38,60 +128,30 @@ pub const LLOYD_MAX_3BIT_BOUNDS: [f32; 3] = [
 pub struct Clifford3BitWord64(pub u64);
 
 impl Clifford3BitWord64 {
-    /// Encodes 16 float weights into a single 64-bit word.
-    /// - Low 48 bits: 16 x 3-bit quantized codes (1 sign bit + 2 magnitude bits).
-    /// - High 16 bits: BF16 scale factor.
-    pub fn pack(weights: &[f32; 16], scale: f32) -> Self {
-        let inv_scale = if scale.abs() > 1e-12 { 1.0 / scale } else { 1.0 };
+    /// Encodes 16 normalized weights (`w * inv_scale`) into 48 packed 3-bit codes
+    /// (sign bit + 2 magnitude bits) using `bounds`, while accumulating `<w, c_norm>`
+    /// and `||c_norm||^2` against `centroids` for optional least-squares scaling.
+    #[inline(always)]
+    fn encode_bits(
+        weights: &[f32; 16],
+        inv_scale: f32,
+        centroids: &[f32; 4],
+        bounds: &[f32; 3],
+    ) -> (u64, f32, f32) {
         let mut bits: u64 = 0;
+        let mut dot_wc = 0.0f32;
+        let mut norm_c_sq = 0.0f32;
 
         for (i, &w) in weights.iter().enumerate() {
             let normalized = w * inv_scale;
             let sign_bit = if normalized < 0.0 { 1u64 } else { 0u64 };
             let abs_val = normalized.abs();
 
-            let mag_code = if abs_val < LLOYD_MAX_3BIT_BOUNDS[0] {
-                0u64
-            } else if abs_val < LLOYD_MAX_3BIT_BOUNDS[1] {
-                1u64
-            } else if abs_val < LLOYD_MAX_3BIT_BOUNDS[2] {
-                2u64
-            } else {
-                3u64
-            };
-
-            let code_3bit = (sign_bit << 2) | mag_code;
-            bits |= code_3bit << (i * 3);
-        }
-
-        let bf16_scale = f32_to_bf16(scale) as u64;
-        bits |= bf16_scale << 48;
-
-        Self(bits)
-    }
-
-    /// Encodes 16 float weights into a single 64-bit word using an exact orthogonal least-squares scale:
-    /// alpha* = <w, c_norm> / ||c_norm||^2.
-    /// Strictly minimizes reconstruction error ||w - alpha* c_norm||^2.
-    pub fn pack_least_squares(weights: &[f32; 16]) -> Self {
-        let sum_sq: f32 = weights.iter().map(|&w| w * w).sum();
-        let std_dev = (sum_sq / 16.0).sqrt().max(1e-8);
-        let inv_std = 1.0 / std_dev;
-
-        let mut bits: u64 = 0;
-        let mut dot_wc = 0.0f32;
-        let mut norm_c_sq = 0.0f32;
-
-        for (i, &w) in weights.iter().enumerate() {
-            let normalized = w * inv_std;
-            let sign_bit = if normalized < 0.0 { 1u64 } else { 0u64 };
-            let abs_val = normalized.abs();
-
-            let mag_code = if abs_val < LLOYD_MAX_3BIT_BOUNDS[0] {
+            let mag_code = if abs_val < bounds[0] {
                 0usize
-            } else if abs_val < LLOYD_MAX_3BIT_BOUNDS[1] {
+            } else if abs_val < bounds[1] {
                 1usize
-            } else if abs_val < LLOYD_MAX_3BIT_BOUNDS[2] {
+            } else if abs_val < bounds[2] {
                 2usize
             } else {
                 3usize
@@ -101,12 +161,67 @@ impl Clifford3BitWord64 {
             bits |= code_3bit << (i * 3);
 
             let sign_f = if sign_bit != 0 { -1.0f32 } else { 1.0f32 };
-            let c_norm = sign_f * LLOYD_MAX_3BIT_CENTROIDS[mag_code];
+            let c_norm = sign_f * centroids[mag_code];
             dot_wc += w * c_norm;
             norm_c_sq += c_norm * c_norm;
         }
 
-        let alpha_ls = if norm_c_sq > 1e-12 { dot_wc / norm_c_sq } else { std_dev };
+        (bits, dot_wc, norm_c_sq)
+    }
+
+    /// Encodes 16 float weights into a single 64-bit word using the default
+    /// N(0, 1) Lloyd-Max bounds and the provided scale.
+    pub fn pack(weights: &[f32; 16], scale: f32) -> Self {
+        Self::pack_with_codebook(weights, scale, &LLOYD_MAX_3BIT_BOUNDS)
+    }
+
+    /// Encodes 16 float weights into a single 64-bit word using caller-provided
+    /// decision boundaries (e.g. from [`compute_symmetric_lloyd_max_3bit`]).
+    /// - Low 48 bits: 16 x 3-bit quantized codes (1 sign bit + 2 magnitude bits).
+    /// - High 16 bits: BF16 scale factor.
+    pub fn pack_with_codebook(weights: &[f32; 16], scale: f32, bounds: &[f32; 3]) -> Self {
+        let inv_scale = if scale.abs() > 1e-12 {
+            1.0 / scale
+        } else {
+            1.0
+        };
+        let (mut bits, _, _) =
+            Self::encode_bits(weights, inv_scale, &LLOYD_MAX_3BIT_CENTROIDS, bounds);
+        let bf16_scale = f32_to_bf16(scale) as u64;
+        bits |= bf16_scale << 48;
+        Self(bits)
+    }
+
+    /// Encodes 16 float weights into a single 64-bit word using the default
+    /// N(0, 1) Lloyd-Max codebook and exact orthogonal least-squares scaling:
+    /// `alpha* = <w, c_norm> / ||c_norm||^2`.
+    /// Strictly minimizes reconstruction error `||w - alpha* c_norm||^2`.
+    pub fn pack_least_squares(weights: &[f32; 16]) -> Self {
+        Self::pack_least_squares_with_codebook(
+            weights,
+            &LLOYD_MAX_3BIT_CENTROIDS,
+            &LLOYD_MAX_3BIT_BOUNDS,
+        )
+    }
+
+    /// Encodes 16 float weights using custom symmetric Lloyd-Max `(centroids, bounds)`
+    /// and orthogonal least-squares scaling `alpha* = <w, c_norm> / ||c_norm||^2`.
+    pub fn pack_least_squares_with_codebook(
+        weights: &[f32; 16],
+        centroids: &[f32; 4],
+        bounds: &[f32; 3],
+    ) -> Self {
+        let sum_sq: f32 = weights.iter().map(|&w| w * w).sum();
+        let std_dev = (sum_sq / 16.0).sqrt().max(1e-8);
+        let inv_std = 1.0 / std_dev;
+
+        let (mut bits, dot_wc, norm_c_sq) = Self::encode_bits(weights, inv_std, centroids, bounds);
+
+        let alpha_ls = if norm_c_sq > 1e-12 {
+            dot_wc / norm_c_sq
+        } else {
+            std_dev
+        };
         let bf16_scale = f32_to_bf16(alpha_ls) as u64;
         bits |= bf16_scale << 48;
 
@@ -120,14 +235,20 @@ impl Clifford3BitWord64 {
         bf16_to_f32(bf16)
     }
 
-    /// Unpacks all 16 reconstructed float weights into the destination buffer.
+    /// Unpacks all 16 reconstructed float weights using the default N(0, 1) centroids.
     pub fn unpack(&self, out: &mut [f32; 16]) {
+        self.unpack_with_codebook(out, &LLOYD_MAX_3BIT_CENTROIDS);
+    }
+
+    /// Unpacks all 16 reconstructed float weights using caller-provided magnitude centroids
+    /// matching the codebook used at pack time.
+    pub fn unpack_with_codebook(&self, out: &mut [f32; 16], centroids: &[f32; 4]) {
         let scale = self.scale();
-        for i in 0..16 {
+        for (i, slot) in out.iter_mut().enumerate() {
             let code = ((self.0 >> (i * 3)) & 0x7) as usize;
             let sign = if (code & 0x4) != 0 { -1.0f32 } else { 1.0f32 };
             let mag_idx = code & 0x3;
-            out[i] = sign * LLOYD_MAX_3BIT_CENTROIDS[mag_idx] * scale;
+            *slot = sign * centroids[mag_idx] * scale;
         }
     }
 
@@ -137,12 +258,12 @@ impl Clifford3BitWord64 {
     pub fn dot_with_slice(&self, x: &[f32; 16]) -> f32 {
         let scale = self.scale();
         let mut sum = 0.0f32;
-        for i in 0..16 {
+        for (i, &xv) in x.iter().enumerate() {
             let code = ((self.0 >> (i * 3)) & 0x7) as usize;
             let sign = if (code & 0x4) != 0 { -1.0f32 } else { 1.0f32 };
             let mag_idx = code & 0x3;
             let w = sign * LLOYD_MAX_3BIT_CENTROIDS[mag_idx] * scale;
-            sum += w * x[i];
+            sum += w * xv;
         }
         sum
     }
@@ -187,27 +308,70 @@ impl Clifford3BitCacheLine64 {
         }
     }
 
+    /// Encodes a single 64-byte cache line into little-endian bytes without `unsafe`.
+    pub fn to_le_bytes(&self) -> [u8; 64] {
+        let mut out = [0u8; 64];
+        for (i, w) in self.words.iter().enumerate() {
+            out[i * 8..(i + 1) * 8].copy_from_slice(&w.0.to_le_bytes());
+        }
+        out
+    }
+
+    /// Decodes a single 64-byte cache line from arbitrarily aligned little-endian bytes without `unsafe`.
+    pub fn from_le_bytes(bytes: &[u8; 64]) -> Self {
+        let mut words = [Clifford3BitWord64(0); 8];
+        for (i, w) in words.iter_mut().enumerate() {
+            let chunk: [u8; 8] = bytes[i * 8..(i + 1) * 8].try_into().unwrap();
+            *w = Clifford3BitWord64(u64::from_le_bytes(chunk));
+        }
+        Self { words }
+    }
+
+    /// Serializes a slice of cache lines to little-endian bytes without `unsafe`.
+    pub fn slice_to_le_bytes(slice: &[Self]) -> Vec<u8> {
+        let mut out = Vec::with_capacity(slice.len() * 64);
+        for line in slice {
+            for w in &line.words {
+                out.extend_from_slice(&w.0.to_le_bytes());
+            }
+        }
+        out
+    }
+
     /// Returns a direct 64-byte slice view of this cache line block.
     #[inline(always)]
     pub fn as_bytes(&self) -> &[u8; 64] {
+        const {
+            assert!(std::mem::size_of::<Self>() == 64);
+            assert!(std::mem::align_of::<Self>() == 64);
+        }
         unsafe { &*(self as *const Self as *const [u8; 64]) }
     }
 
     /// Converts a slice of cache lines into a contiguous byte slice without allocations.
     #[inline(always)]
     pub fn slice_as_bytes(slice: &[Self]) -> &[u8] {
-        unsafe {
-            std::slice::from_raw_parts(slice.as_ptr() as *const u8, slice.len() * 64)
+        const {
+            assert!(std::mem::size_of::<Self>() == 64);
+            assert!(std::mem::align_of::<Self>() == 64);
         }
+        unsafe { std::slice::from_raw_parts(slice.as_ptr() as *const u8, slice.len() * 64) }
     }
 
     /// Casts an aligned slice of bytes into a slice of 64-byte cache lines.
     #[inline(always)]
     pub fn slice_from_bytes(bytes: &[u8]) -> Result<&[Self], String> {
-        if bytes.len() % 64 != 0 {
-            return Err(format!("Byte slice length {} is not a multiple of 64", bytes.len()));
+        const {
+            assert!(std::mem::size_of::<Self>() == 64);
+            assert!(std::mem::align_of::<Self>() == 64);
         }
-        if bytes.as_ptr() as usize % 64 != 0 {
+        if !bytes.len().is_multiple_of(64) {
+            return Err(format!(
+                "Byte slice length {} is not a multiple of 64",
+                bytes.len()
+            ));
+        }
+        if !(bytes.as_ptr() as usize).is_multiple_of(64) {
             return Err(format!(
                 "Byte slice pointer {:p} is not 64-byte cache-line aligned",
                 bytes.as_ptr()
@@ -240,9 +404,18 @@ pub struct Clifford3BitTensor {
 impl Clifford3BitTensor {
     /// Compiles an unquantized FP32 weight matrix into the AOT rotated Clifford 3-bit representation.
     /// Each row is first rotated by `versor` in-place, then packed into 64-byte cache lines.
-    pub fn compile_aot(weights: &[f32], rows: usize, cols: usize, versor: &DyadicWalshVersor) -> Self {
+    pub fn compile_aot(
+        weights: &[f32],
+        rows: usize,
+        cols: usize,
+        versor: &DyadicWalshVersor,
+    ) -> Self {
         assert_eq!(weights.len(), rows * cols);
-        assert_eq!(cols % 128, 0, "Columns must be a multiple of 128 for cache-line alignment");
+        assert_eq!(
+            cols % 128,
+            0,
+            "Columns must be a multiple of 128 for cache-line alignment"
+        );
         assert_eq!(versor.dimension(), cols);
 
         let lines_per_row = cols / 128;
@@ -271,26 +444,75 @@ impl Clifford3BitTensor {
 
     /// Evaluates Matrix-Vector Product y = W * x using Dual Isometry:
     /// <W_row, x> == <R(W_row), R(x)>.
-    /// The activation x is rotated ONCE in O(N log N); weights are operated on directly in 3-bit packed cache lines.
+    /// Automatically utilizes 8-way AVX2 fused vectorization when available on the host CPU.
     pub fn matvec(&self, x: &[f32], out: &mut [f32], versor: &DyadicWalshVersor) {
+        let mut scratch = vec![0.0f32; self.cols];
+        self.matvec_with_scratch(x, out, versor, &mut scratch);
+    }
+
+    /// Evaluates Matrix-Vector Product y = W * x reusing a caller-provided scratch buffer
+    /// of length `self.cols` to avoid heap allocations in hot loops.
+    pub fn matvec_with_scratch(
+        &self,
+        x: &[f32],
+        out: &mut [f32],
+        versor: &DyadicWalshVersor,
+        scratch: &mut [f32],
+    ) {
         assert_eq!(x.len(), self.cols);
         assert_eq!(out.len(), self.rows);
+        assert_eq!(scratch.len(), self.cols);
 
-        // 1. Single activation rotation: x_rot = R(x)
-        let mut x_rot = x.to_vec();
-        versor.apply_in_place(&mut x_rot);
+        #[cfg(target_arch = "x86_64")]
+        {
+            if is_x86_feature_detected!("avx2") && is_x86_feature_detected!("fma") {
+                crate::kernels::clifford_3bit_avx2::matvec_clifford_3bit_with_scratch_avx2(
+                    &self.cache_lines,
+                    self.rows,
+                    self.cols,
+                    x,
+                    out,
+                    versor,
+                    scratch,
+                );
+                return;
+            }
+        }
 
-        // 2. Direct streaming dot products over 64-byte cache lines
+        self.matvec_scalar_with_scratch(x, out, versor, scratch);
+    }
+
+    /// Explicit scalar reference evaluation of Matrix-Vector Product y = W * x.
+    pub fn matvec_scalar(&self, x: &[f32], out: &mut [f32], versor: &DyadicWalshVersor) {
+        let mut scratch = vec![0.0f32; self.cols];
+        self.matvec_scalar_with_scratch(x, out, versor, &mut scratch);
+    }
+
+    /// Explicit scalar evaluation reusing a caller-provided scratch buffer of length `self.cols`.
+    pub fn matvec_scalar_with_scratch(
+        &self,
+        x: &[f32],
+        out: &mut [f32],
+        versor: &DyadicWalshVersor,
+        scratch: &mut [f32],
+    ) {
+        assert_eq!(x.len(), self.cols);
+        assert_eq!(out.len(), self.rows);
+        assert_eq!(scratch.len(), self.cols);
+
+        scratch.copy_from_slice(x);
+        versor.apply_in_place(scratch);
+
         let lines_per_row = self.cols / 128;
-        for r in 0..self.rows {
+        for (r, out_val) in out.iter_mut().enumerate().take(self.rows) {
             let mut row_dot = 0.0f32;
             let line_offset = r * lines_per_row;
             for l in 0..lines_per_row {
                 let cache_line = &self.cache_lines[line_offset + l];
-                let chunk_x: &[f32; 128] = x_rot[l * 128..(l + 1) * 128].try_into().unwrap();
+                let chunk_x: &[f32; 128] = scratch[l * 128..(l + 1) * 128].try_into().unwrap();
                 row_dot += cache_line.dot_128(chunk_x);
             }
-            out[r] = row_dot;
+            *out_val = row_dot;
         }
     }
 }

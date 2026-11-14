@@ -10,7 +10,7 @@
 pub mod clifford_3bit_avx2;
 
 pub use clifford_3bit_avx2::{
-    dot_clifford_3bit_word_avx2, dot_clifford_3bit_cache_line_avx2,
-    matvec_clifford_3bit_avx2, matvec_clifford_3bit_prerotated_avx2,
-    matvec_clifford_3bit_bytes_prerotated_avx2,
+    dot_clifford_3bit_cache_line_avx2, dot_clifford_3bit_word_avx2, matvec_clifford_3bit_avx2,
+    matvec_clifford_3bit_bytes_prerotated_avx2, matvec_clifford_3bit_prerotated_avx2,
+    matvec_clifford_3bit_with_scratch_avx2,
 };

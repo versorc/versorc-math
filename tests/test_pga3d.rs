@@ -115,3 +115,77 @@ fn test_pga_motor_screw_axis_and_sclerp() {
     assert!((my - 2.0).abs() < 1e-4, "Expected my = 2, got {}", my);
     assert!((mz - 5.0).abs() < 1e-4, "Expected mz = 5, got {}", mz);
 }
+
+#[test]
+fn test_pga_point_negation_ideal_unnormalized_and_antipodal_sclerp() {
+    // 1. P + (-P) == 0 across all homogeneous coordinates including w
+    let p = PgaPoint::from_homogeneous(2.5, -1.25, 4.0, 2.0);
+    let sum = p + (-p);
+    assert_eq!(sum, PgaPoint::from_homogeneous(0.0, 0.0, 0.0, 0.0));
+
+    // 2. Ideal point (w = 0) rotates without absorbing translation
+    let motor = PgaMotor::from_rotation_translation(
+        &[0.0, 0.0, 1.0],
+        std::f32::consts::FRAC_PI_2,
+        &[10.0, 20.0, 30.0],
+    );
+    let ideal_dir = PgaPoint::ideal(1.0, 0.0, 0.0);
+    let rot_ideal = motor.transform_point(&ideal_dir);
+    assert!(rot_ideal.is_ideal(), "Ideal point must remain at w = 0");
+    assert!((rot_ideal.x - 0.0).abs() < 1e-5);
+    assert!((rot_ideal.y - 1.0).abs() < 1e-5);
+    assert!((rot_ideal.z - 0.0).abs() < 1e-5);
+    assert_eq!(rot_ideal.w, 0.0);
+
+    // 3. Unnormalized & Study-perturbed motor normalization and transform invariance
+    let scaled_motor = PgaMotor::new(
+        motor.s * 3.5,
+        motor.b23 * 3.5,
+        motor.b31 * 3.5,
+        motor.b12 * 3.5,
+        motor.d01 * 3.5,
+        motor.d02 * 3.5,
+        motor.d03 * 3.5,
+        motor.e0123 * 3.5,
+    );
+    let p_aff = PgaPoint::new(1.0, 2.0, -3.0);
+    let ref_pt = motor.transform_point(&p_aff).to_euclidean();
+    let scaled_pt = scaled_motor.transform_point(&p_aff).to_euclidean();
+    for i in 0..3 {
+        assert!((ref_pt[i] - scaled_pt[i]).abs() < 1e-5);
+    }
+
+    let plane = PgaPlane::from_point_normal(&[0.0, 1.0, 0.0], &[0.0, 1.0, 0.0]);
+    let ref_pl = motor.transform_plane(&plane);
+    let scaled_pl = scaled_motor.transform_plane(&plane);
+    assert!((ref_pl.a - scaled_pl.a).abs() < 1e-5);
+    assert!((ref_pl.b - scaled_pl.b).abs() < 1e-5);
+    assert!((ref_pl.c - scaled_pl.c).abs() < 1e-5);
+    assert!((ref_pl.d - scaled_pl.d).abs() < 1e-5);
+
+    // Perturbed motor off the Study quadric must satisfy M * M~ = 1 after normalized()
+    let dirty = PgaMotor::new(1.2, 0.5, -0.3, 0.8, 0.4, -0.7, 0.2, 1.1);
+    let clean = dirty.normalized();
+    let check = clean.geometric_product(&clean.reverse());
+    assert!(
+        (check.s - 1.0).abs() < 1e-5,
+        "Normalized scalar must be 1, got {}",
+        check.s
+    );
+    assert!(
+        check.e0123.abs() < 1e-5,
+        "Study quadric e0123 residual must be 0, got {}",
+        check.e0123
+    );
+
+    // 4. ScLERP double-cover antipodal shortest path: sclerp(M, -M, 0.5) must stay on M's pose
+    let antipodal = -motor;
+    let mid_same = motor.sclerp(&antipodal, 0.5);
+    let mid_pt = mid_same.transform_point(&p_aff).to_euclidean();
+    for i in 0..3 {
+        assert!(
+            (ref_pt[i] - mid_pt[i]).abs() < 1e-4,
+            "Antipodal ScLERP must stay stationary"
+        );
+    }
+}

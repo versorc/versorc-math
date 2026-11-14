@@ -3,9 +3,9 @@
 // License: Apache-2.0
 // ============================================================================
 
-use std::ops::{Add, Div, Mul, Neg, Sub};
 use super::line::PgaLine;
 use super::plane::PgaPlane;
+use std::ops::{Add, Div, Mul, Neg, Sub};
 
 /// Point in 3D Plane-based Projective Geometric Algebra Cl*(3, 0, 1).
 /// Grade-3 trivector: P = x*e032 + y*e013 + z*e021 + w*e123.
@@ -43,13 +43,23 @@ impl PgaPoint {
     /// Origin point (0, 0, 0, 1) = e123.
     #[inline(always)]
     pub const fn origin() -> Self {
-        Self { x: 0.0, y: 0.0, z: 0.0, w: 1.0 }
+        Self {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+            w: 1.0,
+        }
     }
 
     /// Ideal direction vector at infinity (w = 0.0).
     #[inline(always)]
     pub const fn ideal(dx: f32, dy: f32, dz: f32) -> Self {
-        Self { x: dx, y: dy, z: dz, w: 0.0 }
+        Self {
+            x: dx,
+            y: dy,
+            z: dz,
+            w: 0.0,
+        }
     }
 
     /// Tests if this point is an ideal point at infinity (|w| < 1e-12).
@@ -160,7 +170,7 @@ impl Neg for PgaPoint {
             x: -self.x,
             y: -self.y,
             z: -self.z,
-            w: self.w,
+            w: -self.w,
         }
     }
 }

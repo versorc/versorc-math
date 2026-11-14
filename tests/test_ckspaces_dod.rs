@@ -13,7 +13,8 @@ fn test_cayley_klein_tau_metric_transitions() {
     // 2. Euclidean branch (tau = 0.0)
     let space_euc = CayleyKleinSpace::new(0.0);
     let d_euc = space_euc.geodesic_distance(&x, &y);
-    let expected_euc = ((0.2 - 0.4f32).powi(2) + (0.1 - (-0.1f32)).powi(2) + (0.0 - 0.2f32).powi(2)).sqrt();
+    let expected_euc =
+        ((0.2 - 0.4f32).powi(2) + (0.1 - (-0.1f32)).powi(2) + (0.0 - 0.2f32).powi(2)).sqrt();
     assert!((d_euc - expected_euc).abs() < 1e-6);
 
     // 3. Spherical / Elliptic branch (tau = +1.0)
@@ -47,7 +48,11 @@ fn test_eisenstein_a3_kissing_number_and_conversions() {
 
     for n in &neighbors {
         let d_sq = EisensteinA3Lattice::distance_sq(n[0], n[1], n[2]);
-        assert_eq!(d_sq, 1, "Nearest neighbor {:?} must have distance squared == 1", n);
+        assert_eq!(
+            d_sq, 1,
+            "Nearest neighbor {:?} must have distance squared == 1",
+            n
+        );
     }
 
     // 2. Continuous <-> Discrete roundtrip
@@ -57,12 +62,22 @@ fn test_eisenstein_a3_kissing_number_and_conversions() {
     let (u, v, w) = (2, -1, 3);
     let pt3d = EisensteinA3Lattice::to_euclidean(u, v, w);
     let rounded = EisensteinA3Lattice::from_euclidean(pt3d[0], pt3d[1], pt3d[2]);
-    assert_eq!(rounded, [u, v, w], "Eisenstein lattice roundtrip failed: {:?} vs {:?}", rounded, [u, v, w]);
+    assert_eq!(
+        rounded,
+        [u, v, w],
+        "Eisenstein lattice roundtrip failed: {:?} vs {:?}",
+        rounded,
+        [u, v, w]
+    );
 
     // 3. Poincaré projection
     let p3d = EisensteinA3Lattice::to_poincare(u, v, w, 0.1);
     let norm_p3d = (p3d[0] * p3d[0] + p3d[1] * p3d[1] + p3d[2] * p3d[2]).sqrt();
-    assert!(norm_p3d < 1.0, "Eisenstein Poincaré projection must strictly reside inside unit ball: norm={}", norm_p3d);
+    assert!(
+        norm_p3d < 1.0,
+        "Eisenstein Poincaré projection must strictly reside inside unit ball: norm={}",
+        norm_p3d
+    );
 }
 
 #[test]
@@ -106,7 +121,11 @@ fn test_soa_batch_cache_line_operations() {
     assert_eq!(std::mem::size_of_val(&dist_accum), 64);
 
     for i in 1..16 {
-        assert!(dist_accum.lanes[i] > 0.0, "Geodesic distance lane {} must be positive", i);
+        assert!(
+            dist_accum.lanes[i] > 0.0,
+            "Geodesic distance lane {} must be positive",
+            i
+        );
     }
 
     // 2. Batch Eisenstein A3 conversion
@@ -117,12 +136,15 @@ fn test_soa_batch_cache_line_operations() {
 
     // 3. Batch planar spinor rotation in cache
     let mut batch_rot = batch_a;
-    let cos_45 = 0.70710678f32;
-    let sin_45 = 0.70710678f32;
+    let cos_45 = std::f32::consts::FRAC_1_SQRT_2;
+    let sin_45 = std::f32::consts::FRAC_1_SQRT_2;
     batch_rot.batch_planar_spinor_rotate(cos_45, sin_45);
 
     // Check L2 norm preservation for lane 1
     let norm_before = (batch_a.x[1].powi(2) + batch_a.y[1].powi(2)).sqrt();
     let norm_after = (batch_rot.x[1].powi(2) + batch_rot.y[1].powi(2)).sqrt();
-    assert!((norm_after - norm_before).abs() < 1e-6, "Planar spinor rotation in batch must preserve norm");
+    assert!(
+        (norm_after - norm_before).abs() < 1e-6,
+        "Planar spinor rotation in batch must preserve norm"
+    );
 }

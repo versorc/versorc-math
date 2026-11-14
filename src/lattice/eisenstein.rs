@@ -10,11 +10,11 @@ pub const EISENSTEIN_DIMENSION: usize = 3;
 pub const EISENSTEIN_KISSING_NUMBER: usize = 12;
 
 /// Exact irrational scale factors in rhombohedral A3 FCC geometry:
-pub const SQRT3_DIV2: f32 = 0.8660254037844386; // sqrt(3) / 2
-pub const SQRT3_DIV6: f32 = 0.2886751345948129; // sqrt(3) / 6
-pub const SQRT2_DIV3: f32 = 0.816496580927726;  // sqrt(2/3)
-pub const RATIO_2_SQRT3: f32 = 1.1547005383792515; // 2 / sqrt(3)
-pub const SQRT3_DIV2_INV: f32 = 1.224744871391589; // sqrt(3/2)
+pub const SQRT3_DIV2: f32 = 0.866_025_4; // sqrt(3) / 2
+pub const SQRT3_DIV6: f32 = 0.288_675_13; // sqrt(3) / 6
+pub const SQRT2_DIV3: f32 = 0.816_496_6; // sqrt(2/3)
+pub const RATIO_2_SQRT3: f32 = 1.154_700_5; // 2 / sqrt(3)
+pub const SQRT3_DIV2_INV: f32 = 1.224_744_9; // sqrt(3/2)
 
 /// The 3D Eisenstein A3 FCC Close-Packed Lattice Engine.
 pub struct EisensteinA3Lattice;

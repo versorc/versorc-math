@@ -55,6 +55,39 @@ impl E8LatticeCodebook {
         Self { table }
     }
 
+    /// Reads centroid `index` (0..128) from the 1-KiB L1d codebook and scales back to half-integer E8 roots.
+    #[inline]
+    pub fn decode_centroid(&self, index: usize, scale: f32) -> [f32; E8_DIMENSION] {
+        assert!(index < E8_NUM_CENTROIDS, "E8 centroid index out of bounds");
+        let base = index * E8_DIMENSION;
+        let factor = 0.5 * scale;
+        let mut out = [0.0f32; E8_DIMENSION];
+        for (d, dst) in out.iter_mut().enumerate() {
+            *dst = (self.table[base + d] as f32) * factor;
+        }
+        out
+    }
+
+    /// Searches the 1-KiB `self.table` codebook for the half-integer E8 root centroid maximizing
+    /// inner product `<x, c_i>` (nearest E8P root under equal radius).
+    pub fn nearest_centroid(&self, x: &[f32; E8_DIMENSION]) -> usize {
+        let mut best_idx = 0usize;
+        let mut best_dot = f32::NEG_INFINITY;
+        for c in 0..E8_NUM_CENTROIDS {
+            let base = c * E8_DIMENSION;
+            let dot: f32 = x
+                .iter()
+                .zip(self.table[base..base + E8_DIMENSION].iter())
+                .map(|(&xi, &ti)| xi * (ti as f32))
+                .sum();
+            if dot > best_dot {
+                best_dot = dot;
+                best_idx = c;
+            }
+        }
+        best_idx
+    }
+
     /// Decodes a 4-bit nibble [0..15] back into its 2D constituent weights (w0, w1).
     /// Invertible bijection with project_and_encode_to_nibbles. Unbiased symmetric levels in [-1.5, +1.5].
     #[inline(always)]
@@ -108,6 +141,7 @@ impl E8Lattice {
     /// Generates all 240 minimal root vectors of the E8 lattice in R^8.
     /// - 112 roots in D8: permutations of (+-1, +-1, 0, 0, 0, 0, 0, 0).
     /// - 128 roots in D8 + 1/2*1: (+-1/2, ..., +-1/2) with an even number of minus signs.
+    ///
     /// Every root satisfies ||r||^2 = 2.0.
     pub fn generate_240_roots() -> [[f32; E8_DIMENSION]; E8_NUM_ROOTS] {
         let mut roots = [[0.0f32; E8_DIMENSION]; E8_NUM_ROOTS];
@@ -134,9 +168,12 @@ impl E8Lattice {
             // Parity of negative signs: count number of set bits in mask
             if mask.count_ones() % 2 == 0 {
                 let mut root = [0.0f32; E8_DIMENSION];
-                for d in 0..E8_DIMENSION {
-                    let sign = if ((mask >> d) & 1) == 0 { 0.5f32 } else { -0.5f32 };
-                    root[d] = sign;
+                for (d, dst) in root.iter_mut().enumerate() {
+                    *dst = if ((mask >> d) & 1) == 0 {
+                        0.5f32
+                    } else {
+                        -0.5f32
+                    };
                 }
                 roots[idx] = root;
                 idx += 1;
@@ -164,9 +201,9 @@ impl E8Lattice {
         if sum_f % 2 != 0 {
             let mut max_err_idx = 0;
             let mut max_err = errors[0];
-            for i in 1..E8_DIMENSION {
-                if errors[i] > max_err {
-                    max_err = errors[i];
+            for (i, &err) in errors.iter().enumerate().skip(1) {
+                if err > max_err {
+                    max_err = err;
                     max_err_idx = i;
                 }
             }

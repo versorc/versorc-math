@@ -7,13 +7,15 @@ name = "versorc-math"
 version = "0.1.1"
 description = "Clifford Geometric Algebra, Versor Operators, and High-Dimensional Quantization"
 readme = "README.md"
-authors = [{ name = "The VersorC Project Contributors" }]
+authors = [{ name = "The VersorC Project Contributors", email = "zeph.systems@proton.me" }]
 license = { text = "Apache-2.0" }
 requires-python = ">=3.9"
-dependencies = [
-    "numpy>=1.20",
-    "matplotlib>=3.5",
-]
+dependencies = []
+
+[project.optional-dependencies]
+interop = ["numpy>=1.20"]
+test = ["pytest>=7.0", "numpy>=1.20"]
+dev = ["pytest>=7.0", "numpy>=1.20", "maturin>=1.5,<2.0"]
 classifiers = [
     "Programming Language :: Rust",
     "Programming Language :: Python :: 3",
@@ -25,4 +27,4 @@ classifiers = [
 [tool.maturin]
 module-name = "versorc_math._versorc_math"
 python-source = "python"
-features = ["python"]
+features = ["python", "vulkan"]

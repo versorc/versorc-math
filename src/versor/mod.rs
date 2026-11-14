@@ -3,19 +3,19 @@
 // License: Apache-2.0
 // ============================================================================
 
-pub mod hamilton;
 pub mod dual_quaternion;
-pub mod rotor;
-pub mod householder;
 pub mod dyadic;
+pub mod hamilton;
+pub mod householder;
 pub mod planar_bank;
+pub mod rotor;
 
-pub use hamilton::Quaternion;
 pub use dual_quaternion::DualQuaternion;
-pub use rotor::PlanarRotor;
-pub use householder::{HouseholderVersor, HouseholderChain};
 pub use dyadic::DyadicWalshVersor;
+pub use hamilton::Quaternion;
+pub use householder::{HouseholderChain, HouseholderVersor};
 pub use planar_bank::PlanarSpinorBank;
+pub use rotor::PlanarRotor;
 
 /// Trait defining the two-sided sandwich action of a Versor: x |-> V * x * V~.
 pub trait VersorAction<T: ?Sized> {

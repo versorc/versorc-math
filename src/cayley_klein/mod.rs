@@ -5,6 +5,4 @@
 
 pub mod ga;
 
-pub use ga::{
-    CkLine3D, CkMotor3D, CkMultivector3D, CkPlane3D, CkPoint3D,
-};
+pub use ga::{CkLine3D, CkMotor3D, CkMultivector3D, CkPlane3D, CkPoint3D};
